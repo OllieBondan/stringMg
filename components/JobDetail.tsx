@@ -53,7 +53,7 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
   const spec = (label: string, value: string) =>
     value ? (
       <div className="flex justify-between gap-3 py-1">
-        <span className="text-slate-500">{label}</span>
+        <span className="text-slate-500 dark:text-slate-400">{label}</span>
         <span className="text-right font-medium">{value}</span>
       </div>
     ) : null;
@@ -62,7 +62,10 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <Link href="/" className="text-sm text-emerald-700 underline-offset-2 hover:underline">
+          <Link
+            href="/"
+            className="text-sm text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+          >
             ← All records
           </Link>
           <h1 className="mt-1 text-xl font-bold">{job.customerName}</h1>
@@ -70,24 +73,24 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
         <StatusBadge status={job.status} />
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-800">
         {spec("Racket", [job.racketBrand, job.racketType].filter(Boolean).join(" "))}
         {spec("Racket color", job.racketColor)}
         {spec("String", job.stringType)}
         {spec("String color", job.stringColor)}
         {spec("Tension", job.tensionValue && `${job.tensionValue} ${job.tensionUnit}`)}
         {spec("Notes", job.notes)}
-        <div className="mt-2 border-t border-slate-100 pt-2 text-right">
+        <div className="mt-2 border-t border-slate-100 pt-2 text-right dark:border-slate-700">
           <Link
             href={`/jobs/${job.id}/edit`}
-            className="text-sm font-medium text-emerald-700 underline-offset-2 hover:underline"
+            className="text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
           >
             Edit details
           </Link>
         </div>
       </div>
 
-      <ol className="rounded-xl border border-slate-200 bg-white p-3">
+      <ol className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
         {STEPS.map((step, i) => {
           const stamp = job.steps[step.key];
           const isNext = next?.key === step.key;
@@ -96,7 +99,7 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
               {i < STEPS.length - 1 && (
                 <span
                   className={`absolute left-[13px] top-7 h-full w-0.5 ${
-                    stamp ? "bg-emerald-500" : "bg-slate-200"
+                    stamp ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-700"
                   }`}
                 />
               )}
@@ -105,18 +108,22 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
                   stamp
                     ? "bg-emerald-500 text-white"
                     : isNext
-                      ? "border-2 border-emerald-500 bg-white text-emerald-600"
-                      : "border-2 border-slate-200 bg-white text-slate-400"
+                      ? "border-2 border-emerald-500 bg-white text-emerald-600 dark:bg-slate-800"
+                      : "border-2 border-slate-200 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
                 }`}
               >
                 {stamp ? "✓" : i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className={`font-medium ${stamp || isNext ? "text-slate-900" : "text-slate-400"}`}>
+                <p
+                  className={`font-medium ${
+                    stamp || isNext ? "text-slate-900 dark:text-slate-100" : "text-slate-400 dark:text-slate-500"
+                  }`}
+                >
                   {step.label}
                 </p>
                 {stamp && (
-                  <p className="text-xs text-slate-500" suppressHydrationWarning>
+                  <p className="text-xs text-slate-500 dark:text-slate-400" suppressHydrationWarning>
                     {formatDateTime(stamp.at)} · by {shortUser(stamp.by)}
                     {last?.key === step.key && step.key !== "received" && (
                       <>
@@ -124,7 +131,7 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
                         <button
                           onClick={() => patch("undo")}
                           disabled={busy}
-                          className="text-red-600 underline-offset-2 hover:underline disabled:opacity-50"
+                          className="text-red-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-red-400"
                         >
                           undo
                         </button>
@@ -147,9 +154,13 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
         })}
       </ol>
 
-      {error && <p className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800">{error}</p>}
+      {error && (
+        <p className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-300">
+          {error}
+        </p>
+      )}
 
-      <div className="text-xs text-slate-400" suppressHydrationWarning>
+      <div className="text-xs text-slate-400 dark:text-slate-500" suppressHydrationWarning>
         Created {formatDateTime(job.createdAt)} by {shortUser(job.createdBy)} · Last change{" "}
         {formatDateTime(job.updatedAt)} by {shortUser(job.updatedBy)}
       </div>
@@ -157,7 +168,7 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
       <button
         onClick={remove}
         disabled={busy}
-        className="self-start text-sm font-medium text-red-600 underline-offset-2 hover:underline disabled:opacity-50"
+        className="self-start text-sm font-medium text-red-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-red-400"
       >
         Delete job
       </button>

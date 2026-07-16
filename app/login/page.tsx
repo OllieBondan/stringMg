@@ -18,10 +18,10 @@ export default async function LoginPage({
       <div className="text-6xl">🏸</div>
       <div>
         <h1 className="text-2xl font-bold">String Management</h1>
-        <p className="mt-1 text-slate-600">Badminton racket stringing tracker</p>
+        <p className="mt-1 text-slate-600 dark:text-slate-400">Badminton racket stringing tracker</p>
       </div>
       {error && (
-        <p className="max-w-xs rounded-lg bg-red-100 px-4 py-3 text-sm text-red-800">
+        <p className="max-w-xs rounded-lg bg-red-100 px-4 py-3 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-300">
           {error === "AccessDenied"
             ? "This Google account is not on the allowed list."
             : "Sign-in failed. Please try again."}

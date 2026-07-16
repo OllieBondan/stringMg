@@ -25,7 +25,9 @@ function SelectWithOther({
   const selectValue = other ? OTHER : value;
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+        {label}
+      </span>
       <select
         value={selectValue}
         required={required && !other}
@@ -38,7 +40,7 @@ function SelectWithOther({
             onChange(e.target.value);
           }
         }}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
       >
         <option value="" disabled>
           Select…
@@ -57,7 +59,7 @@ function SelectWithOther({
           required={required}
           placeholder={`${label} (type here)`}
           onChange={(e) => onChange(e.target.value)}
-          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         />
       )}
     </label>
@@ -79,7 +81,9 @@ function ChipRadio({
 }) {
   return (
     <fieldset>
-      <legend className="mb-1 block text-sm font-medium text-slate-700">{label}</legend>
+      <legend className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+        {label}
+      </legend>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
           <label
@@ -87,7 +91,7 @@ function ChipRadio({
             className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${
               value === o
                 ? "border-emerald-600 bg-emerald-600 text-white"
-                : "border-slate-300 bg-white text-slate-700"
+                : "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
             }`}
           >
             <input
@@ -178,19 +182,23 @@ export default function JobForm({ initial }: { initial?: Job }) {
       <h1 className="text-xl font-bold">{initial ? "Edit job" : "New stringing job"}</h1>
 
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-slate-700">Customer name</span>
+        <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+          Customer name
+        </span>
         <input
           type="text"
           value={specs.customerName}
           onChange={(e) => set("customerName")(e.target.value)}
           required
           placeholder="Who handed over the racket"
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         />
       </label>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3">
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Racket</h2>
+      <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Racket
+        </h2>
         <div className="flex flex-col gap-3">
           <SelectWithOther
             label="Brand"
@@ -215,8 +223,10 @@ export default function JobForm({ initial }: { initial?: Job }) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3">
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">String</h2>
+      <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          String
+        </h2>
         <div className="flex flex-col gap-3">
           <SelectWithOther
             label="String type"
@@ -234,7 +244,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
           />
           <div className="flex items-end gap-3">
             <label className="block flex-1">
-              <span className="mb-1 block text-sm font-medium text-slate-700">
+              <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Tension ({range.min}–{range.max} {specs.tensionUnit})
               </span>
               <input
@@ -246,7 +256,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
                 value={specs.tensionValue}
                 onChange={(e) => set("tensionValue")(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               />
             </label>
             <div className="flex gap-2 pb-0.5">
@@ -256,7 +266,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
                   className={`cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium ${
                     specs.tensionUnit === u
                       ? "border-emerald-600 bg-emerald-600 text-white"
-                      : "border-slate-300 bg-white text-slate-700"
+                      : "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                   }`}
                 >
                   <input
@@ -276,16 +286,22 @@ export default function JobForm({ initial }: { initial?: Job }) {
       </div>
 
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-slate-700">Notes (optional)</span>
+        <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+          Notes (optional)
+        </span>
         <textarea
           value={specs.notes}
           onChange={(e) => set("notes")(e.target.value)}
           rows={2}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         />
       </label>
 
-      {error && <p className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800">{error}</p>}
+      {error && (
+        <p className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-300">
+          {error}
+        </p>
+      )}
 
       <div className="flex gap-3">
         <button
@@ -298,7 +314,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
         <button
           type="button"
           onClick={() => router.back()}
-          className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-700"
+          className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
         >
           Cancel
         </button>

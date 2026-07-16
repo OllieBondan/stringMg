@@ -10,12 +10,12 @@ export const STATUS_LABELS: Record<JobStatus, string> = {
 };
 
 const STATUS_STYLES: Record<JobStatus, string> = {
-  RECEIVED: "bg-slate-200 text-slate-700",
-  WITH_TITON: "bg-amber-100 text-amber-800",
-  STRUNG: "bg-sky-100 text-sky-800",
-  RETURNED: "bg-violet-100 text-violet-800",
-  PAID: "bg-emerald-100 text-emerald-800",
-  DONE: "bg-emerald-600 text-white",
+  RECEIVED: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
+  WITH_TITON: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
+  STRUNG: "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300",
+  RETURNED: "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300",
+  PAID: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300",
+  DONE: "bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white",
 };
 
 export default function StatusBadge({ status }: { status: JobStatus }) {

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (toggled by ThemeToggle) instead of only following
+   prefers-color-scheme, so the user's choice can override the system. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 html {
   -webkit-tap-highlight-color: transparent;
 }
