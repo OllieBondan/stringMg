@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# env files (real secrets never committed)
+.env
+.env.local
+.env*.local
+
+# real data lives in Vercel Blob in prod; local dev file is not committed
+data/records.csv
+
+# misc
+*.tsbuildinfo
+coverage/
+.DS_Store

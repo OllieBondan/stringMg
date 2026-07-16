@@ -4,88 +4,106 @@ Guidance for Claude Code when working in this repository.
 
 ## Project Overview
 
-A small web application with a lightweight data layer. Data volume is capped
-at ~1000 records, so we deliberately avoid a full database engine. Persistence
-is handled via a single CSV file instead of Postgres/MySQL/Oracle/etc.
+A small mobile-first web app that tracks badminton racket stringing jobs
+through a fixed 6-step workflow (received from customer → to Titon → back from
+Titon → returned to owner → paid → payment forwarded to Tasya). Data volume is
+capped at ~2000 records, so we deliberately avoid a database engine.
+Persistence is a single CSV file.
 
-- **Backend:** Spring Boot 3.2, Java 21
-- **Storage:** CSV file (`data/records.csv`), read/written via a repository
-  abstraction — no JPA, no Hibernate, no embedded DB (no H2/SQLite either)
-- **Frontend:** [fill in — e.g. Thymeleaf / React / plain HTML+JS]
-- **Build tool:** Maven
+- **Stack:** Next.js 15 (App Router) + TypeScript, Tailwind CSS 4
+- **Auth:** Auth.js (NextAuth v5), Google provider only, email allowlist
+  (`ALLOWED_EMAILS`)
+- **Storage:** one CSV file — Vercel Blob in production, `data/records.csv`
+  on disk in local dev/tests, both behind `lib/blobStore.ts`
+- **Hosting:** Vercel (GitHub repo: OllieBondan/stringMg)
+- **Tests:** Vitest
 
 ## Why CSV, not a database
 
-- Max ~1000 records, single-writer, low concurrency
+- Max ~2000 records, single-writer, low concurrency
 - No need for complex queries, joins, or transactions
-- Easier to inspect/edit by hand, easier to back up (just copy the file)
+- Easy to inspect by hand, easy to back up, exports trivially to Google Sheets
 - If requirements grow (concurrent writers, >10k records, relational queries),
   revisit this decision — don't prematurely add a DB before it's needed
 
 ## Data Layer Rules
 
-- All CSV access goes through `CsvRecordRepository` (or equivalent) — no
-  direct file I/O scattered across the codebase
-- Use `BigDecimal` for any monetary/precise numeric fields, never `float`/`double`
-- Always read the full file into memory, mutate, then write atomically
-  (write to a temp file, then rename) to avoid partial writes on crash
-- Validate row shape on read; fail loudly (log + throw) on malformed rows
-  rather than silently skipping them
-- Keep a header row in the CSV; never rely on positional columns without it
-- One CSV file = one entity/table. If a second entity is needed, use a
-  second CSV file rather than encoding two record types in one file
-- Escape/quote fields properly (use a CSV library — e.g. Apache Commons CSV
-  or OpenCSV — never hand-roll comma splitting)
+- ALL CSV access goes through `lib/csvRepository.ts` — no file/blob I/O
+  scattered across the codebase
+- Always read the full file into memory, mutate, then write back atomically
+  (temp file + rename locally; single blob `put` on Vercel). Mutations are
+  serialized through the in-module lock (`withLock`)
+- Validate row shape on read; fail loudly (log + throw `MalformedCsvError`)
+  on malformed rows rather than silently skipping them
+- Keep the header row; column order is defined once in `CSV_HEADER`
+- Numeric-ish fields (tension) are stored and passed around as **strings** —
+  never parse them into floats for storage
+- One CSV file = one entity. A second entity would get a second file
+- CSV parsing/serialization uses csv-parse/csv-stringify — never hand-rolled
+  comma splitting
+- Every mutation stamps `updated_at`/`updated_by`; each workflow step stores
+  its own `*_at`/`*_by` audit pair. Step order is defined once in
+  `STEPS` (`lib/types.ts`) — derive everything (status, next action, CSV
+  columns) from it
 
 ## Project Structure
 
 ```
-src/main/java/.../
-  controller/     REST or MVC controllers
-  service/        Business logic
-  repository/     CsvRecordRepository + CSV read/write logic
-  model/          Domain records/DTOs
+app/                 Pages (App Router) + API route handlers
+  api/jobs/          List/create + per-job PATCH (advance/undo/updateSpecs)/DELETE
+  api/export/        Creates a Google Sheet via the user's OAuth token
+  api/download/      Raw CSV download
+components/          Client components (JobList, JobForm, JobDetail, StatusBadge)
+lib/                 types.ts, options.ts, blobStore.ts, csvRepository.ts,
+                     auth.ts, session.ts, api.ts, format.ts
 data/
-  records.csv     The actual data file (gitignored if it contains real data;
-                   commit a records.sample.csv for reference/tests instead)
+  records.sample.csv Reference/sample data; the real file is never committed
 ```
 
 ## Commands
 
 ```bash
-mvn spring-boot:run       # run locally
-mvn test                  # run tests
-mvn clean package         # build jar
+npm run dev        # local dev server (DEV_NO_AUTH=1 skips Google login)
+npm test           # Vitest unit tests
+npm run build      # production build (includes type checking)
+npm run typecheck  # tsc --noEmit
 ```
+
+## Environment / tooling gotchas
+
+- **Never run npm/next inside the Google Drive folder** (`G:\My Drive\...`) —
+  the Drive filesystem breaks `npm install` and `.next` writes. Work from a
+  local clone; GitHub is the sync mechanism.
+- TypeScript must stay on **v5** (`typescript@5`) — Next 15 breaks with TS 7.
+- Windows: the local file store retries renames on EPERM/EBUSY; keep that.
 
 ## Testing
 
-- Unit test the repository against a temp CSV file (JUnit `@TempDir`), never
-  against the real `data/records.csv`
-- Cover: empty file, header-only file, malformed row, concurrent read/write
-  during a rewrite
-- Prefer testing through the repository interface, not file internals
+- Unit test the repository against a temp-dir file store (never the real
+  data file) — see `lib/csvRepository.test.ts`
+- Cover: missing file, header-only file, malformed rows, quoting/escaping
+  round-trips, step advance/undo, stale-write conflicts, concurrent writes
+- Prefer testing through the repository functions, not file internals
 
 ## Code Style
 
-- Standard Java conventions, 4-space indent
-- Constructor injection over field injection
-- Keep controllers thin; business logic lives in services
-- No unnecessary abstraction — this is a small app; don't add repository
-  interfaces/factories "for future flexibility" unless there's a concrete
-  near-term need
+- Standard TypeScript/React conventions, functional components, 2-space indent
+- Keep route handlers thin: parse/authz → call repository → map errors
+  (`lib/api.ts`)
+- No unnecessary abstraction — this is a small app; don't add layers/factories
+  "for future flexibility" without a concrete near-term need
 
 ## What NOT to do
 
 - Don't introduce a database (embedded or otherwise) without discussing it
-  first — that's a deliberate architectural choice, not an oversight
+  first — deliberate architectural choice, not an oversight
 - Don't add an ORM
-- Don't add authentication/authorization frameworks unless asked
+- Don't broaden the Google OAuth scopes beyond `drive.file`
 - Don't over-engineer for scale this app won't reach
 
 ## Workflow Notes
 
-- When adding a feature, check whether it touches the CSV schema — if so,
-  update both the repository and the sample CSV
-- Run `mvn test` before considering a change done
+- If a change touches the CSV schema: update `CSV_HEADER`/`STEPS`,
+  `data/records.sample.csv`, and the tests together
+- Run `npm test` and `npm run build` before considering a change done
 - Prefer small, reviewable diffs — show a plan before large refactors

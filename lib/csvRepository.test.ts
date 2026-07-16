@@ -1,0 +1,159 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { BlobStore, localFileStore } from "./blobStore";
+import {
+  CSV_HEADER,
+  ConflictError,
+  MalformedCsvError,
+  NotFoundError,
+  advanceStep,
+  createJob,
+  deleteJob,
+  getJob,
+  listJobs,
+  readAll,
+  undoLastStep,
+  updateSpecs,
+  writeAll,
+} from "./csvRepository";
+import { JobSpecs, STEPS } from "./types";
+
+const SPECS: JobSpecs = {
+  customerName: "Budi",
+  racketBrand: "Yonex",
+  racketType: "Astrox",
+  racketColor: "Red",
+  stringType: "Yonex BG80",
+  stringColor: "White",
+  tensionValue: "12",
+  tensionUnit: "Kg",
+  notes: "handle with care, includes \"quotes\", commas, and\nnewlines",
+};
+
+describe("csvRepository", () => {
+  let dir: string;
+  let file: string;
+  let store: BlobStore;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), "csv-repo-test-"));
+    file = path.join(dir, "records.csv");
+    store = localFileStore(file);
+  });
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("returns [] when the file does not exist", async () => {
+    expect(await readAll(store)).toEqual([]);
+  });
+
+  it("returns [] for a header-only file", async () => {
+    await writeAll([], store);
+    const content = await fs.readFile(file, "utf8");
+    expect(content.trim()).toBe(CSV_HEADER.join(","));
+    expect(await readAll(store)).toEqual([]);
+  });
+
+  it("creates a job with step 1 stamped and audit fields set", async () => {
+    const job = await createJob(SPECS, "ollie@example.com", store);
+    expect(job.id).toBeTruthy();
+    expect(job.status).toBe("RECEIVED");
+    expect(job.steps.received?.by).toBe("ollie@example.com");
+    expect(job.createdBy).toBe("ollie@example.com");
+    expect(job.updatedBy).toBe("ollie@example.com");
+
+    const roundtripped = await getJob(job.id, store);
+    expect(roundtripped).toEqual(job);
+  });
+
+  it("round-trips fields containing quotes, commas and newlines", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    const read = await getJob(job.id, store);
+    expect(read.notes).toBe(SPECS.notes);
+  });
+
+  it("advances through all six steps to DONE", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    let current = job;
+    for (let i = 1; i < STEPS.length; i++) {
+      current = await advanceStep(job.id, `user${i}@b.c`, undefined, store);
+    }
+    expect(current.status).toBe("DONE");
+    expect(current.steps.forwarded?.by).toBe("user5@b.c");
+    await expect(advanceStep(job.id, "a@b.c", undefined, store)).rejects.toThrow(ConflictError);
+  });
+
+  it("undoes the last step but never the intake step", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    await advanceStep(job.id, "a@b.c", undefined, store);
+    const undone = await undoLastStep(job.id, "a@b.c", undefined, store);
+    expect(undone.status).toBe("RECEIVED");
+    await expect(undoLastStep(job.id, "a@b.c", undefined, store)).rejects.toThrow(ConflictError);
+  });
+
+  it("updates specs and the updated_* audit fields", async () => {
+    const job = await createJob(SPECS, "creator@b.c", store);
+    const updated = await updateSpecs(
+      job.id,
+      { ...SPECS, tensionValue: "13" },
+      "editor@b.c",
+      job.updatedAt,
+      store
+    );
+    expect(updated.tensionValue).toBe("13");
+    expect(updated.updatedBy).toBe("editor@b.c");
+    expect(updated.createdBy).toBe("creator@b.c");
+  });
+
+  it("rejects a stale write with ConflictError", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    await advanceStep(job.id, "a@b.c", undefined, store);
+    await expect(
+      updateSpecs(job.id, SPECS, "a@b.c", job.updatedAt, store)
+    ).rejects.toThrow(ConflictError);
+  });
+
+  it("deletes a job and 404s on unknown ids", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    await deleteJob(job.id, store);
+    expect(await listJobs(store)).toEqual([]);
+    await expect(deleteJob(job.id, store)).rejects.toThrow(NotFoundError);
+    await expect(getJob(job.id, store)).rejects.toThrow(NotFoundError);
+  });
+
+  it("fails loudly on a header mismatch", async () => {
+    await fs.writeFile(file, "id,name\n1,x\n", "utf8");
+    await expect(readAll(store)).rejects.toThrow(MalformedCsvError);
+  });
+
+  it("fails loudly on a row with the wrong column count", async () => {
+    await writeAll([], store);
+    await fs.appendFile(file, "some-id,too,few,columns\n", "utf8");
+    await expect(readAll(store)).rejects.toThrow(MalformedCsvError);
+  });
+
+  it("fails loudly on an invalid status", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    const content = await fs.readFile(file, "utf8");
+    await fs.writeFile(file, content.replace("RECEIVED", "BOGUS"), "utf8");
+    await expect(getJob(job.id, store)).rejects.toThrow(MalformedCsvError);
+  });
+
+  it("serializes concurrent writes so none are lost", async () => {
+    await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        createJob({ ...SPECS, customerName: `Customer ${i}` }, "a@b.c", store)
+      )
+    );
+    expect(await listJobs(store)).toHaveLength(10);
+  });
+
+  it("rejects invalid input", async () => {
+    await expect(createJob({ ...SPECS, customerName: "  " }, "a@b.c", store)).rejects.toThrow();
+    await expect(createJob({ ...SPECS, tensionValue: "abc" }, "a@b.c", store)).rejects.toThrow();
+  });
+});
