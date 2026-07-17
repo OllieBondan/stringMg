@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -6,24 +7,54 @@ import path from "node:path";
  * Production uses Vercel Blob (Vercel's filesystem is ephemeral);
  * local dev and tests use a plain file on disk.
  */
-export interface BlobStore {
-  /** Full file content, or null if the file does not exist yet. */
-  read(): Promise<string | null>;
-  /** Replace the full file content in one atomic operation. */
-  write(content: string): Promise<void>;
+export interface BlobRead {
+  content: string;
+  /** Version marker for conditional writes (compare-and-swap). */
+  etag?: string;
 }
 
+export interface BlobStore {
+  /** Full file content + version, or null if the file does not exist yet. */
+  read(): Promise<BlobRead | null>;
+  /**
+   * Replace the full file content in one atomic operation. When ifMatch is
+   * given and the stored version differs, throws StoreConflictError and
+   * writes nothing — the caller re-reads and retries on fresh data.
+   */
+  write(content: string, ifMatch?: string): Promise<void>;
+}
+
+/** The store's current version didn't match ifMatch — re-read and retry. */
+export class StoreConflictError extends Error {
+  constructor() {
+    super("Store content changed since it was read");
+  }
+}
+
+const contentHash = (content: string) => createHash("sha1").update(content).digest("hex");
+
 export function localFileStore(filePath: string): BlobStore {
+  async function readRaw(): Promise<string | null> {
+    try {
+      return await fs.readFile(filePath, "utf8");
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw err;
+    }
+  }
+
   return {
     async read() {
-      try {
-        return await fs.readFile(filePath, "utf8");
-      } catch (err: unknown) {
-        if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-        throw err;
-      }
+      const content = await readRaw();
+      return content === null ? null : { content, etag: contentHash(content) };
     },
-    async write(content: string) {
+    async write(content: string, ifMatch?: string) {
+      if (ifMatch) {
+        const current = await readRaw();
+        if (current === null || contentHash(current) !== ifMatch) {
+          throw new StoreConflictError();
+        }
+      }
       // temp file + rename so a crash mid-write never leaves a partial CSV
       await fs.mkdir(path.dirname(filePath), { recursive: true });
       const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -73,12 +104,13 @@ export function vercelBlobStore(token: string): BlobStore {
   const accessMismatch = (err: unknown) =>
     err instanceof Error && /access on a (private|public) store/i.test(err.message);
 
-  // Blob overwrites propagate eventually — a read right after a write can
-  // return the previous version. Every write is still synchronous to Blob
-  // (durability is never in memory only), but this instance remembers what
-  // it wrote last and serves that whenever it is newer than what Blob
-  // returned. Another instance's later write has a later uploadedAt and wins.
-  let lastWrite: { content: string; at: number } | null = null;
+  // Blob READS propagate eventually — a read right after a write can return
+  // the previous version. Writes are conditional (ifMatch) and evaluated
+  // against the authoritative store, so correctness never depends on read
+  // freshness; this cache just makes an instance see its own writes
+  // immediately. A later write from another instance has a later uploadedAt
+  // and wins.
+  let lastWrite: { content: string; etag: string; at: number } | null = null;
 
   return {
     async read() {
@@ -91,7 +123,7 @@ export function vercelBlobStore(token: string): BlobStore {
         // instanceof, not err.name — the SDK's error classes never set .name
         if (err instanceof BlobNotFoundError) {
           // e.g. the very first write hasn't propagated yet
-          return lastWrite ? lastWrite.content : null;
+          return lastWrite ? { content: lastWrite.content, etag: lastWrite.etag } : null;
         }
         throw err;
       }
@@ -103,20 +135,20 @@ export function vercelBlobStore(token: string): BlobStore {
           if (!result || result.statusCode !== 200 || !result.stream) {
             throw new Error(`records.csv exists but could not be read with ${access} access`);
           }
-          const blobContent = await new Response(result.stream).text();
+          const content = await new Response(result.stream).text();
           if (lastWrite && lastWrite.at > result.blob.uploadedAt.getTime()) {
-            return lastWrite.content; // our write is newer than what Blob served
+            return { content: lastWrite.content, etag: lastWrite.etag };
           }
           lastWrite = null;
-          return blobContent;
+          return { content, etag: result.blob.etag };
         } catch (err) {
           if (attempt > 0) throw err;
           flip();
         }
       }
     },
-    async write(content: string) {
-      const { put } = await import("@vercel/blob");
+    async write(content: string, ifMatch?: string) {
+      const { put, BlobPreconditionFailedError } = await import("@vercel/blob");
       const doPut = () =>
         put(BLOB_PATHNAME, content, {
           access,
@@ -125,15 +157,23 @@ export function vercelBlobStore(token: string): BlobStore {
           cacheControlMaxAge: 60,
           contentType: "text/csv",
           token,
+          ...(ifMatch ? { ifMatch } : {}),
         });
+      let result;
       try {
-        await doPut();
+        result = await doPut();
       } catch (err) {
+        if (err instanceof BlobPreconditionFailedError) throw new StoreConflictError();
         if (!accessMismatch(err)) throw err;
         flip();
-        await doPut();
+        try {
+          result = await doPut();
+        } catch (err2) {
+          if (err2 instanceof BlobPreconditionFailedError) throw new StoreConflictError();
+          throw err2;
+        }
       }
-      lastWrite = { content, at: Date.now() };
+      lastWrite = { content, etag: result.etag, at: Date.now() };
     },
   };
 }

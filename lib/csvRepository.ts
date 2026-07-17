@@ -1,6 +1,6 @@
 import { parse } from "csv-parse/sync";
 import { stringify } from "csv-stringify/sync";
-import { BlobStore, getStore } from "./blobStore";
+import { BlobStore, StoreConflictError, getStore } from "./blobStore";
 import {
   Job,
   JobSpecs,
@@ -118,9 +118,8 @@ function jobToRow(job: Job): string[] {
 /** The schema before the step-7 "payment received by Tasya" step was added. */
 const LEGACY_CSV_HEADER = CSV_HEADER.filter((c) => !c.startsWith("step7_"));
 
-export async function readAll(store: BlobStore = getStore()): Promise<Job[]> {
-  const content = await store.read();
-  if (content === null || content.trim() === "") return [];
+function parseJobs(content: string): Job[] {
+  if (content.trim() === "") return [];
 
   const rows: string[][] = parse(content, {
     bom: true,
@@ -153,9 +152,29 @@ export async function readAll(store: BlobStore = getStore()): Promise<Job[]> {
   }
 }
 
-export async function writeAll(jobs: Job[], store: BlobStore = getStore()): Promise<void> {
+interface CsvState {
+  jobs: Job[];
+  /** Version marker of the content these jobs were parsed from. */
+  etag?: string;
+}
+
+async function readState(store: BlobStore = getStore()): Promise<CsvState> {
+  const result = await store.read();
+  if (result === null) return { jobs: [] };
+  return { jobs: parseJobs(result.content), etag: result.etag };
+}
+
+export async function readAll(store?: BlobStore): Promise<Job[]> {
+  return (await readState(store)).jobs;
+}
+
+export async function writeAll(
+  jobs: Job[],
+  store: BlobStore = getStore(),
+  ifMatch?: string
+): Promise<void> {
   const content = stringify([[...CSV_HEADER], ...jobs.map(jobToRow)]);
-  await store.write(content);
+  await store.write(content, ifMatch);
 }
 
 // Serialize mutations within this process so concurrent requests can't
@@ -165,6 +184,30 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
   const run = mutationQueue.then(fn, fn);
   mutationQueue = run.catch(() => {});
   return run;
+}
+
+// Cross-instance safety: every mutation is a compare-and-swap — read the CSV
+// with its version, apply the change, write conditionally (ifMatch). If the
+// store changed in between (another instance wrote), or our read was a stale
+// replica, the conditional write fails and the whole cycle retries on
+// fresh(er) data. Correctness never depends on read freshness.
+const CAS_ATTEMPTS = 5;
+const CAS_DELAY_MS = Number(process.env.CSV_CAS_DELAY_MS ?? 500);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** True when committed; false when the store moved on and we must retry. */
+async function tryCommit(
+  jobs: Job[],
+  store: BlobStore | undefined,
+  etag?: string
+): Promise<boolean> {
+  try {
+    await writeAll(jobs, store ?? getStore(), etag);
+    return true;
+  } catch (err) {
+    if (err instanceof StoreConflictError) return false;
+    throw err;
+  }
 }
 
 export async function listJobs(store?: BlobStore): Promise<Job[]> {
@@ -234,9 +277,12 @@ export async function createJob(input: JobSpecsInput, user: string, store?: Blob
     updatedBy: user,
   };
   await withLock(async () => {
-    const jobs = await readAll(store);
-    jobs.push(job);
-    await writeAll(jobs, store);
+    for (let attempt = 1; attempt <= CAS_ATTEMPTS; attempt++) {
+      const { jobs, etag } = await readState(store);
+      if (await tryCommit([...jobs, job], store, etag)) return;
+      await sleep(CAS_DELAY_MS);
+    }
+    throw new ConflictError("Storage is busy — please try again");
   });
   return job;
 }
@@ -249,18 +295,39 @@ async function mutateJob(
   store?: BlobStore
 ): Promise<Job> {
   return withLock(async () => {
-    const jobs = await readAll(store);
-    const job = jobs.find((j) => j.id === id);
-    if (!job) throw new NotFoundError(`Job ${id} not found`);
-    if (expectedUpdatedAt && expectedUpdatedAt !== job.updatedAt) {
-      throw new ConflictError("Job was changed by someone else — reload and try again");
+    for (let attempt = 1; attempt <= CAS_ATTEMPTS; attempt++) {
+      const { jobs, etag } = await readState(store);
+      const job = jobs.find((j) => j.id === id);
+      const isLastAttempt = attempt === CAS_ATTEMPTS;
+
+      // A missing job or an older-than-expected updatedAt usually means this
+      // read was a stale replica (the client literally saw a newer version) —
+      // wait for propagation instead of failing with a false conflict.
+      if (!job) {
+        if (isLastAttempt) throw new NotFoundError(`Job ${id} not found`);
+        await sleep(CAS_DELAY_MS);
+        continue;
+      }
+      if (expectedUpdatedAt && job.updatedAt < expectedUpdatedAt) {
+        if (isLastAttempt) {
+          throw new ConflictError("Storage is still syncing — please try again in a moment");
+        }
+        await sleep(CAS_DELAY_MS);
+        continue;
+      }
+      // A strictly newer updatedAt is a real concurrent change by someone else.
+      if (expectedUpdatedAt && job.updatedAt > expectedUpdatedAt) {
+        throw new ConflictError("Job was changed by someone else — reload and try again");
+      }
+
+      mutate(job);
+      job.status = deriveStatus(job.steps);
+      job.updatedAt = new Date().toISOString();
+      job.updatedBy = user;
+      if (await tryCommit(jobs, store, etag)) return job;
+      await sleep(CAS_DELAY_MS);
     }
-    mutate(job);
-    job.status = deriveStatus(job.steps);
-    job.updatedAt = new Date().toISOString();
-    job.updatedBy = user;
-    await writeAll(jobs, store);
-    return job;
+    throw new ConflictError("Storage is busy — please try again");
   });
 }
 
@@ -334,18 +401,27 @@ export async function undoLastStep(
 
 export async function deleteJob(id: string, store?: BlobStore): Promise<void> {
   await withLock(async () => {
-    const jobs = await readAll(store);
-    const remaining = jobs.filter((j) => j.id !== id);
-    if (remaining.length === jobs.length) throw new NotFoundError(`Job ${id} not found`);
-    await writeAll(remaining, store);
+    for (let attempt = 1; attempt <= CAS_ATTEMPTS; attempt++) {
+      const { jobs, etag } = await readState(store);
+      const remaining = jobs.filter((j) => j.id !== id);
+      if (remaining.length === jobs.length) {
+        // possibly a stale replica that doesn't show the job yet
+        if (attempt === CAS_ATTEMPTS) throw new NotFoundError(`Job ${id} not found`);
+        await sleep(CAS_DELAY_MS);
+        continue;
+      }
+      if (await tryCommit(remaining, store, etag)) return;
+      await sleep(CAS_DELAY_MS);
+    }
+    throw new ConflictError("Storage is busy — please try again");
   });
 }
 
 /** Raw CSV content for download/export (always includes the header row). */
 export async function rawCsv(store: BlobStore = getStore()): Promise<string> {
-  const content = await store.read();
-  if (content === null || content.trim() === "") {
+  const result = await store.read();
+  if (result === null || result.content.trim() === "") {
     return stringify([[...CSV_HEADER]]);
   }
-  return content;
+  return result.content;
 }

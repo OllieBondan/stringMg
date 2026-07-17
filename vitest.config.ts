@@ -8,5 +8,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["lib/**/*.test.ts"],
+    env: {
+      CSV_CAS_DELAY_MS: "10", // keep compare-and-swap retry waits fast in tests
+    },
   },
 });

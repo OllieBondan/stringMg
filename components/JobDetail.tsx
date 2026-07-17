@@ -37,6 +37,7 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
+      router.refresh(); // re-sync the displayed job, e.g. after a conflict
     } finally {
       setBusy(false);
     }

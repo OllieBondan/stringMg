@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { BlobStore, localFileStore } from "./blobStore";
+import { BlobStore, StoreConflictError, localFileStore } from "./blobStore";
 import {
   CSV_HEADER,
   ConflictError,
@@ -158,7 +158,33 @@ describe("csvRepository", () => {
     await advanceStep(job.id, "a@b.c", undefined, store);
     await expect(
       updateSpecs(job.id, SPECS, "a@b.c", job.updatedAt, store)
-    ).rejects.toThrow(ConflictError);
+    ).rejects.toThrow("changed by someone else");
+  });
+
+  it("does not falsely conflict when expectedUpdatedAt matches exactly", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    const advanced = await advanceStep(job.id, "a@b.c", job.updatedAt, store);
+    const again = await advanceStep(job.id, "a@b.c", advanced.updatedAt, store);
+    expect(again.status).toBe("STRUNG");
+  });
+
+  it("reports syncing (not a false conflict) when the store lags behind the client", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    // client claims to have seen a NEWER version than the store has — that is
+    // a stale replica, not a concurrent edit
+    await expect(
+      advanceStep(job.id, "a@b.c", "2999-01-01T00:00:00.000Z", store)
+    ).rejects.toThrow("still syncing");
+  });
+
+  it("enforces conditional writes at the store level (CAS)", async () => {
+    await writeAll([], store);
+    const first = await store.read();
+    await expect(store.write("changed", "wrong-etag")).rejects.toThrow(StoreConflictError);
+    expect((await store.read())!.etag).toBe(first!.etag); // failed write changed nothing
+    await store.write(`${CSV_HEADER.join(",")}\nchanged-content`, first!.etag); // correct etag succeeds
+    const after = await store.read();
+    expect(after!.etag).not.toBe(first!.etag);
   });
 
   it("deletes a job and 404s on unknown ids", async () => {
