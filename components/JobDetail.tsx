@@ -8,16 +8,25 @@ import { Job, STEPS, lastCompletedStep, nextStep } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
 
-export default function JobDetail({ job: initialJob }: { job: Job }) {
+export default function JobDetail({
+  job: initialJob,
+  canConfirmTasya,
+}: {
+  job: Job;
+  canConfirmTasya: boolean;
+}) {
   useFreshData();
   const router = useRouter();
   const [job, setJob] = useState(initialJob);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Adopt fresh server data when router.refresh() re-renders this page —
-  // useState's initial value alone would keep showing the stale job.
-  useEffect(() => setJob(initialJob), [initialJob]);
+  // Adopt server data from router.refresh() only when it is strictly NEWER —
+  // a refresh served by a lagging replica must not roll the UI back to the
+  // state before the click (visible as a sub-second status flicker).
+  useEffect(() => {
+    setJob((current) => (initialJob.updatedAt > current.updatedAt ? initialJob : current));
+  }, [initialJob]);
 
   const next = nextStep(job);
   const last = lastCompletedStep(job);
@@ -132,7 +141,9 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
                 {stamp && (
                   <p className="text-xs text-slate-500 dark:text-slate-400" suppressHydrationWarning>
                     {formatDateTime(stamp.at)} · by {shortUser(stamp.by)}
-                    {last?.key === step.key && step.key !== "received" && (
+                    {last?.key === step.key &&
+                      step.key !== "received" &&
+                      (step.key !== "tasyaReceived" || canConfirmTasya) && (
                       <>
                         {" · "}
                         <button
@@ -146,15 +157,20 @@ export default function JobDetail({ job: initialJob }: { job: Job }) {
                     )}
                   </p>
                 )}
-                {isNext && (
-                  <button
-                    onClick={() => patch("advance")}
-                    disabled={busy}
-                    className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white shadow hover:bg-emerald-700 active:scale-[.99] disabled:opacity-50"
-                  >
-                    {busy ? "Saving…" : step.action}
-                  </button>
-                )}
+                {isNext &&
+                  (step.key === "tasyaReceived" && !canConfirmTasya ? (
+                    <p className="mt-2 rounded-xl bg-slate-100 px-3 py-3 text-center text-sm text-slate-500 dark:bg-slate-700/50 dark:text-slate-400">
+                      Waiting for Tasya to confirm she received the payment
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => patch("advance")}
+                      disabled={busy}
+                      className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white shadow hover:bg-emerald-700 active:scale-[.99] disabled:opacity-50"
+                    >
+                      {busy ? "Saving…" : step.action}
+                    </button>
+                  ))}
               </div>
             </li>
           );

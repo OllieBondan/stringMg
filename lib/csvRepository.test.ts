@@ -1,11 +1,14 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { parse } from "csv-parse/sync";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BlobStore, StoreConflictError, localFileStore } from "./blobStore";
 import {
   CSV_HEADER,
   ConflictError,
+  DELETED_CSV_HEADER,
+  ForbiddenError,
   MalformedCsvError,
   NotFoundError,
   advanceStep,
@@ -80,11 +83,12 @@ describe("csvRepository", () => {
     const job = await createJob(SPECS, "a@b.c", store);
     let current = job;
     for (let i = 1; i < STEPS.length; i++) {
-      current = await advanceStep(job.id, `user${i}@b.c`, undefined, store);
+      const actor = i === STEPS.length - 1 ? "alyssatasya@gmail.com" : `user${i}@b.c`;
+      current = await advanceStep(job.id, actor, undefined, store);
     }
     expect(current.status).toBe("DONE");
     expect(current.steps.forwarded?.by).toBe("user5@b.c");
-    expect(current.steps.tasyaReceived?.by).toBe("user6@b.c");
+    expect(current.steps.tasyaReceived?.by).toBe("alyssatasya@gmail.com");
     await expect(advanceStep(job.id, "a@b.c", undefined, store)).rejects.toThrow(ConflictError);
   });
 
@@ -125,7 +129,7 @@ describe("csvRepository", () => {
     expect(job.steps.tasyaReceived).toBeUndefined();
 
     // advancing writes the file back in the new 7-step schema
-    const confirmed = await advanceStep("legacy-1", "tasya@b.c", undefined, store);
+    const confirmed = await advanceStep("legacy-1", "alyssatasya@gmail.com", undefined, store);
     expect(confirmed.status).toBe("DONE");
     const content = await fs.readFile(file, "utf8");
     expect(content.split("\n")[0]).toBe(CSV_HEADER.join(","));
@@ -187,12 +191,50 @@ describe("csvRepository", () => {
     expect(after!.etag).not.toBe(first!.etag);
   });
 
-  it("deletes a job and 404s on unknown ids", async () => {
+  it("moves a deleted job into the archive CSV and 404s on unknown ids", async () => {
+    const archive = localFileStore(path.join(dir, "deleted.csv"));
     const job = await createJob(SPECS, "a@b.c", store);
-    await deleteJob(job.id, store);
+    await deleteJob(job.id, "deleter@b.c", store, archive);
     expect(await listJobs(store)).toEqual([]);
-    await expect(deleteJob(job.id, store)).rejects.toThrow(NotFoundError);
+
+    const archivedRows: string[][] = parse((await archive.read())!.content, {
+      skip_empty_lines: true,
+    });
+    expect(archivedRows[0]).toEqual([...DELETED_CSV_HEADER]);
+    expect(archivedRows).toHaveLength(2);
+    expect(archivedRows[1][0]).toBe(job.id);
+    expect(archivedRows[1][archivedRows[1].length - 1]).toBe("deleter@b.c");
+
+    await expect(deleteJob(job.id, "deleter@b.c", store, archive)).rejects.toThrow(NotFoundError);
     await expect(getJob(job.id, store)).rejects.toThrow(NotFoundError);
+
+    // a second deletion appends, never overwrites
+    const job2 = await createJob({ ...SPECS, customerName: "Second" }, "a@b.c", store);
+    await deleteJob(job2.id, "deleter@b.c", store, archive);
+    const afterSecond: string[][] = parse((await archive.read())!.content, {
+      skip_empty_lines: true,
+    });
+    expect(afterSecond).toHaveLength(3);
+    expect(afterSecond[2][0]).toBe(job2.id);
+  });
+
+  it("only Tasya can confirm or undo the final payment step", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    let current = job;
+    for (let i = 1; i <= 5; i++) current = await advanceStep(job.id, "a@b.c", undefined, store);
+    expect(current.status).toBe("FORWARDED");
+
+    await expect(advanceStep(job.id, "ollie@b.c", undefined, store)).rejects.toThrow(
+      ForbiddenError
+    );
+    const done = await advanceStep(job.id, "alyssatasya@gmail.com", undefined, store);
+    expect(done.status).toBe("DONE");
+
+    await expect(undoLastStep(job.id, "ollie@b.c", undefined, store)).rejects.toThrow(
+      ForbiddenError
+    );
+    const undone = await undoLastStep(job.id, "alyssatasya@gmail.com", undefined, store);
+    expect(undone.status).toBe("FORWARDED");
   });
 
   it("fails loudly on a header mismatch", async () => {

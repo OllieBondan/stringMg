@@ -82,7 +82,7 @@ export function localFileStore(filePath: string): BlobStore {
   };
 }
 
-const BLOB_PATHNAME = "records.csv";
+const DEFAULT_PATHNAME = "records.csv";
 
 /**
  * The store's read-write token. Vercel names it BLOB_READ_WRITE_TOKEN by
@@ -95,7 +95,7 @@ export function blobToken(): string | undefined {
   return key ? process.env[key] : undefined;
 }
 
-export function vercelBlobStore(token: string): BlobStore {
+export function vercelBlobStore(token: string, pathname: string = DEFAULT_PATHNAME): BlobStore {
   // A store is created as either public or private and every call must pass
   // the matching access mode. There is no API to ask which one it is, so we
   // assume public and flip permanently on the first mismatch error.
@@ -122,7 +122,7 @@ export function vercelBlobStore(token: string): BlobStore {
       // it made every conditional write fail).
       const readMeta = async () => {
         try {
-          return await head(BLOB_PATHNAME, { token });
+          return await head(pathname, { token });
         } catch (err: unknown) {
           // instanceof, not err.name — the SDK's error classes never set .name
           if (err instanceof BlobNotFoundError) return null;
@@ -142,7 +142,7 @@ export function vercelBlobStore(token: string): BlobStore {
       for (let attempt = 0; ; attempt++) {
         let result;
         try {
-          result = await get(BLOB_PATHNAME, { access, token, useCache: false });
+          result = await get(pathname, { access, token, useCache: false });
         } catch (err) {
           if (flipped) throw err;
           flipped = true;
@@ -150,7 +150,7 @@ export function vercelBlobStore(token: string): BlobStore {
           continue;
         }
         if (!result || result.statusCode !== 200 || !result.stream) {
-          throw new Error(`records.csv exists but could not be read with ${access} access`);
+          throw new Error(`${pathname} exists but could not be read with ${access} access`);
         }
         const content = await new Response(result.stream).text();
         const contentAt = result.blob.uploadedAt.getTime();
@@ -173,7 +173,7 @@ export function vercelBlobStore(token: string): BlobStore {
     async write(content: string, ifMatch?: string) {
       const { put, BlobPreconditionFailedError } = await import("@vercel/blob");
       const doPut = () =>
-        put(BLOB_PATHNAME, content, {
+        put(pathname, content, {
           access,
           addRandomSuffix: false,
           allowOverwrite: true,
@@ -222,18 +222,21 @@ function unconfiguredVercelStore(): BlobStore {
   };
 }
 
-let defaultStore: BlobStore | null = null;
+const storeCache = new Map<string, BlobStore>();
 
-export function getStore(): BlobStore {
-  if (!defaultStore) {
+/** One store per CSV file (records.csv, deleted.csv, …), cached per process. */
+export function getStore(pathname: string = DEFAULT_PATHNAME): BlobStore {
+  let store = storeCache.get(pathname);
+  if (!store) {
     const token = blobToken();
     if (token) {
-      defaultStore = vercelBlobStore(token);
+      store = vercelBlobStore(token, pathname);
     } else if (process.env.VERCEL) {
-      defaultStore = unconfiguredVercelStore();
+      store = unconfiguredVercelStore();
     } else {
-      defaultStore = localFileStore(path.join(process.cwd(), "data", "records.csv"));
+      store = localFileStore(path.join(process.cwd(), "data", pathname));
     }
+    storeCache.set(pathname, store);
   }
-  return defaultStore;
+  return store;
 }

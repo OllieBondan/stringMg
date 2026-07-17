@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ConflictError, MalformedCsvError, NotFoundError } from "./csvRepository";
+import { ConflictError, ForbiddenError, MalformedCsvError, NotFoundError } from "./csvRepository";
 import { SessionUser, getSessionUser } from "./session";
 
 export class UnauthorizedError extends Error {}
@@ -13,6 +13,9 @@ export async function requireUser(): Promise<SessionUser> {
 export function toErrorResponse(err: unknown): NextResponse {
   if (err instanceof UnauthorizedError) {
     return NextResponse.json({ error: err.message }, { status: 401 });
+  }
+  if (err instanceof ForbiddenError) {
+    return NextResponse.json({ error: err.message }, { status: 403 });
   }
   if (err instanceof NotFoundError) {
     return NextResponse.json({ error: err.message }, { status: 404 });

@@ -1,6 +1,7 @@
 import { parse } from "csv-parse/sync";
 import { stringify } from "csv-stringify/sync";
 import { BlobStore, StoreConflictError, getStore } from "./blobStore";
+import { isTasya } from "./permissions";
 import {
   Job,
   JobSpecs,
@@ -42,6 +43,7 @@ export const CSV_HEADER = [
 export class MalformedCsvError extends Error {}
 export class NotFoundError extends Error {}
 export class ConflictError extends Error {}
+export class ForbiddenError extends Error {}
 
 function rowToJob(row: string[], rowNumber: number): Job {
   const get = (col: (typeof CSV_HEADER)[number]) => row[CSV_HEADER.indexOf(col)];
@@ -375,6 +377,9 @@ export async function advanceStep(
     (job) => {
       const step = nextStep(job);
       if (!step) throw new ConflictError("Job is already complete");
+      if (step.key === "tasyaReceived" && !isTasya(user)) {
+        throw new ForbiddenError("Only Tasya can confirm that the payment was received");
+      }
       job.steps[step.key] = { at: new Date().toISOString(), by: user };
     },
     user,
@@ -397,6 +402,9 @@ export async function undoLastStep(
       if (step.key === "received") {
         throw new ConflictError("Cannot undo the intake step — delete the job instead");
       }
+      if (step.key === "tasyaReceived" && !isTasya(user)) {
+        throw new ForbiddenError("Only Tasya can undo her payment confirmation");
+      }
       delete job.steps[step.key];
     },
     user,
@@ -404,18 +412,54 @@ export async function undoLastStep(
   );
 }
 
-export async function deleteJob(id: string, store?: BlobStore): Promise<void> {
+/** Deleted jobs are moved (not destroyed) into a second CSV, deleted.csv. */
+export const DELETED_CSV_HEADER = [...CSV_HEADER, "deleted_at", "deleted_by"] as const;
+
+async function archiveDeletedJob(job: Job, user: string, archive: BlobStore): Promise<void> {
+  const archivedRow = [...jobToRow(job), new Date().toISOString(), user];
+  for (let attempt = 1; attempt <= CAS_ATTEMPTS; attempt++) {
+    const existing = await archive.read();
+    if (existing && existing.content.trim() !== "") {
+      // already archived (e.g. a retried delete) — don't duplicate the row
+      const rows: string[][] = parse(existing.content, { bom: true, skip_empty_lines: true });
+      if (rows.some((row) => row[0] === job.id)) return;
+    }
+    const base =
+      existing && existing.content.trim() !== ""
+        ? existing.content.endsWith("\n")
+          ? existing.content
+          : `${existing.content}\n`
+        : stringify([[...DELETED_CSV_HEADER]]);
+    try {
+      await archive.write(base + stringify([archivedRow]), existing?.etag);
+      return;
+    } catch (err) {
+      if (!(err instanceof StoreConflictError)) throw err;
+      await sleep(CAS_DELAY_MS);
+    }
+  }
+  throw new ConflictError("Storage is busy — please try again");
+}
+
+export async function deleteJob(
+  id: string,
+  user: string,
+  store?: BlobStore,
+  archive: BlobStore = getStore("deleted.csv")
+): Promise<void> {
   await withLock(async () => {
     for (let attempt = 1; attempt <= CAS_ATTEMPTS; attempt++) {
       const { jobs, etag } = await readState(store);
-      const remaining = jobs.filter((j) => j.id !== id);
-      if (remaining.length === jobs.length) {
+      const job = jobs.find((j) => j.id === id);
+      if (!job) {
         // possibly a stale replica that doesn't show the job yet
         if (attempt === CAS_ATTEMPTS) throw new NotFoundError(`Job ${id} not found`);
         await sleep(CAS_DELAY_MS);
         continue;
       }
-      if (await tryCommit(remaining, store, etag)) return;
+      // archive first — if anything fails, the record still exists in records.csv
+      await archiveDeletedJob(job, user, archive);
+      if (await tryCommit(jobs.filter((j) => j.id !== id), store, etag)) return;
       await sleep(CAS_DELAY_MS);
     }
     throw new ConflictError("Storage is busy — please try again");

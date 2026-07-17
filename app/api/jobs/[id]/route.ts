@@ -45,9 +45,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const { id } = await params;
-    await deleteJob(id);
+    await deleteJob(id, user.email);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return toErrorResponse(err);
