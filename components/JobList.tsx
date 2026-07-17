@@ -137,33 +137,33 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
               onClick={clearFilters}
               className="text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
             >
-              Clear filters
+              Clear
             </button>
           )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className={selectClass}
-            aria-label="Sort"
-          >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="customer">By customer</option>
-            <option value="status">By status</option>
-          </select>
-          <select
-            value={group}
-            onChange={(e) => setGroup(e.target.value as GroupKey)}
-            className={selectClass}
-            aria-label="Group"
-          >
-            <option value="none">No grouping</option>
-            <option value="status">Group: status</option>
-            <option value="brand">Group: brand</option>
-            <option value="customer">Group: customer</option>
-          </select>
+          <span className="ms-auto flex items-center gap-2">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className={selectClass}
+              aria-label="Sort"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="customer">By customer</option>
+              <option value="status">By status</option>
+            </select>
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value as GroupKey)}
+              className={selectClass}
+              aria-label="Group"
+            >
+              <option value="none">No grouping</option>
+              <option value="status">Group: status</option>
+              <option value="brand">Group: brand</option>
+              <option value="customer">Group: customer</option>
+            </select>
+          </span>
         </div>
       </div>
 

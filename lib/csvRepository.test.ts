@@ -76,7 +76,7 @@ describe("csvRepository", () => {
     expect(read.notes).toBe(SPECS.notes);
   });
 
-  it("advances through all six steps to DONE", async () => {
+  it("advances through all seven steps to DONE", async () => {
     const job = await createJob(SPECS, "a@b.c", store);
     let current = job;
     for (let i = 1; i < STEPS.length; i++) {
@@ -84,7 +84,51 @@ describe("csvRepository", () => {
     }
     expect(current.status).toBe("DONE");
     expect(current.steps.forwarded?.by).toBe("user5@b.c");
+    expect(current.steps.tasyaReceived?.by).toBe("user6@b.c");
     await expect(advanceStep(job.id, "a@b.c", undefined, store)).rejects.toThrow(ConflictError);
+  });
+
+  it("reaches FORWARDED after step 6, before Tasya confirms", async () => {
+    const job = await createJob(SPECS, "a@b.c", store);
+    let current = job;
+    for (let i = 1; i <= 5; i++) {
+      current = await advanceStep(job.id, "a@b.c", undefined, store);
+    }
+    expect(current.status).toBe("FORWARDED");
+  });
+
+  it("migrates a legacy 6-step CSV, reopening old DONE jobs as FORWARDED", async () => {
+    const iso = "2026-07-01T10:00:00.000Z";
+    const legacyHeader = CSV_HEADER.filter((c) => !c.startsWith("step7_"));
+    const values: Record<string, string> = {
+      id: "legacy-1",
+      customer_name: "Legacy Customer",
+      racket_brand: "Yonex",
+      racket_type: "Astrox",
+      racket_color: "Red",
+      string_type: "Yonex BG65",
+      string_color: "White",
+      tension_value: "11",
+      tension_unit: "Kg",
+      status: "DONE",
+      notes: "",
+    };
+    const line = legacyHeader
+      .map((c) => values[c] ?? (c.endsWith("_at") ? iso : "a@b.c"))
+      .join(",");
+    await fs.writeFile(file, `${legacyHeader.join(",")}\n${line}\n`, "utf8");
+
+    const [job] = await readAll(store);
+    expect(job.id).toBe("legacy-1");
+    expect(job.status).toBe("FORWARDED"); // Tasya's confirmation now pending
+    expect(job.steps.forwarded?.at).toBe(iso);
+    expect(job.steps.tasyaReceived).toBeUndefined();
+
+    // advancing writes the file back in the new 7-step schema
+    const confirmed = await advanceStep("legacy-1", "tasya@b.c", undefined, store);
+    expect(confirmed.status).toBe("DONE");
+    const content = await fs.readFile(file, "utf8");
+    expect(content.split("\n")[0]).toBe(CSV_HEADER.join(","));
   });
 
   it("undoes the last step but never the intake step", async () => {

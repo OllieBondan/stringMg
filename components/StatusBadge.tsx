@@ -6,6 +6,7 @@ export const STATUS_LABELS: Record<JobStatus, string> = {
   STRUNG: "Strung",
   RETURNED: "Returned",
   PAID: "Paid",
+  FORWARDED: "Forwarded",
   DONE: "Done",
 };
 
@@ -15,6 +16,7 @@ const STATUS_STYLES: Record<JobStatus, string> = {
   STRUNG: "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300",
   RETURNED: "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300",
   PAID: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300",
+  FORWARDED: "bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300",
   DONE: "bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white",
 };
 

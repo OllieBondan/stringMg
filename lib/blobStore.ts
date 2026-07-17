@@ -73,6 +73,13 @@ export function vercelBlobStore(token: string): BlobStore {
   const accessMismatch = (err: unknown) =>
     err instanceof Error && /access on a (private|public) store/i.test(err.message);
 
+  // Blob overwrites propagate eventually — a read right after a write can
+  // return the previous version. Every write is still synchronous to Blob
+  // (durability is never in memory only), but this instance remembers what
+  // it wrote last and serves that whenever it is newer than what Blob
+  // returned. Another instance's later write has a later uploadedAt and wins.
+  let lastWrite: { content: string; at: number } | null = null;
+
   return {
     async read() {
       const { head, get, BlobNotFoundError } = await import("@vercel/blob");
@@ -82,7 +89,10 @@ export function vercelBlobStore(token: string): BlobStore {
         await head(BLOB_PATHNAME, { token });
       } catch (err: unknown) {
         // instanceof, not err.name — the SDK's error classes never set .name
-        if (err instanceof BlobNotFoundError) return null;
+        if (err instanceof BlobNotFoundError) {
+          // e.g. the very first write hasn't propagated yet
+          return lastWrite ? lastWrite.content : null;
+        }
         throw err;
       }
       // The blob exists: from here on a failed read must throw, never pass
@@ -93,7 +103,12 @@ export function vercelBlobStore(token: string): BlobStore {
           if (!result || result.statusCode !== 200 || !result.stream) {
             throw new Error(`records.csv exists but could not be read with ${access} access`);
           }
-          return await new Response(result.stream).text();
+          const blobContent = await new Response(result.stream).text();
+          if (lastWrite && lastWrite.at > result.blob.uploadedAt.getTime()) {
+            return lastWrite.content; // our write is newer than what Blob served
+          }
+          lastWrite = null;
+          return blobContent;
         } catch (err) {
           if (attempt > 0) throw err;
           flip();
@@ -118,6 +133,7 @@ export function vercelBlobStore(token: string): BlobStore {
         flip();
         await doPut();
       }
+      lastWrite = { content, at: Date.now() };
     },
   };
 }

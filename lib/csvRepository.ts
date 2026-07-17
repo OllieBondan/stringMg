@@ -115,6 +115,9 @@ function jobToRow(job: Job): string[] {
   ];
 }
 
+/** The schema before the step-7 "payment received by Tasya" step was added. */
+const LEGACY_CSV_HEADER = CSV_HEADER.filter((c) => !c.startsWith("step7_"));
+
 export async function readAll(store: BlobStore = getStore()): Promise<Job[]> {
   const content = await store.read();
   if (content === null || content.trim() === "") return [];
@@ -125,8 +128,15 @@ export async function readAll(store: BlobStore = getStore()): Promise<Job[]> {
     relax_column_count: true, // we validate column count ourselves, with a clear error
   });
 
-  const [header, ...dataRows] = rows;
-  if (header.join(",") !== CSV_HEADER.join(",")) {
+  let [header, ...dataRows] = rows;
+  let legacy = false;
+  if (header.join(",") === LEGACY_CSV_HEADER.join(",")) {
+    // Migrate 6-step rows in place: empty step-7 columns, status re-derived
+    // (their "DONE" meant forwarded — Tasya's confirmation is now pending).
+    legacy = true;
+    const insertAt = CSV_HEADER.indexOf("step7_tasya_received_at" as never);
+    dataRows = dataRows.map((row) => [...row.slice(0, insertAt), "", "", ...row.slice(insertAt)]);
+  } else if (header.join(",") !== CSV_HEADER.join(",")) {
     const msg = `CSV header mismatch — expected [${CSV_HEADER.join(",")}], got [${header.join(",")}]`;
     console.error(msg);
     throw new MalformedCsvError(msg);
@@ -134,7 +144,9 @@ export async function readAll(store: BlobStore = getStore()): Promise<Job[]> {
 
   try {
     // +2: 1-based line numbers, +1 for the header row
-    return dataRows.map((row, i) => rowToJob(row, i + 2));
+    const jobs = dataRows.map((row, i) => rowToJob(row, i + 2));
+    if (legacy) for (const job of jobs) job.status = deriveStatus(job.steps);
+    return jobs;
   } catch (err) {
     console.error(err);
     throw err;
@@ -163,6 +175,27 @@ export async function getJob(id: string, store?: BlobStore): Promise<Job> {
   const job = (await readAll(store)).find((j) => j.id === id);
   if (!job) throw new NotFoundError(`Job ${id} not found`);
   return job;
+}
+
+/**
+ * getJob with brief retries — right after a create, a different serverless
+ * instance can still see the pre-write CSV for a moment (Blob overwrites
+ * propagate eventually), which used to 404 the just-created job's page.
+ */
+export async function getJobWithRetry(
+  id: string,
+  attempts = 3,
+  delayMs = 700,
+  store?: BlobStore
+): Promise<Job> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await getJob(id, store);
+    } catch (err) {
+      if (!(err instanceof NotFoundError) || attempt >= attempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
 }
 
 function validateSpecs(specs: JobSpecs): void {

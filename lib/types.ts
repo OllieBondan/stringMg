@@ -46,6 +46,13 @@ export const STEPS = [
     column: "step6_forwarded",
     label: "Payment forwarded to Tasya",
     action: "Forward payment to Tasya",
+    status: "FORWARDED",
+  },
+  {
+    key: "tasyaReceived",
+    column: "step7_tasya_received",
+    label: "Payment received by Tasya",
+    action: "Confirm Tasya received payment",
     status: "DONE",
   },
 ] as const;
