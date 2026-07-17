@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { auth } from "./auth";
 
 export interface SessionUser {
@@ -25,4 +26,14 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     name: session.user.name ?? session.user.email,
     accessToken: session.accessToken,
   };
+}
+
+/**
+ * Page-level auth guard (defense in depth on top of the middleware):
+ * redirects to /login when there is no authorized session.
+ */
+export async function requireSessionUser(): Promise<SessionUser> {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  return user;
 }
