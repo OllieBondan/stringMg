@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="sticky top-0 z-20 bg-emerald-700 text-white shadow dark:bg-emerald-800">
           <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
             <Link href="/" className="text-lg font-bold tracking-tight">
-              🏸 String Management
+              🏸 Stringing Tracker
             </Link>
             <div className="flex items-center gap-3">
               <ThemeToggle />

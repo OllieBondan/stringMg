@@ -53,13 +53,24 @@ export function localFileStore(filePath: string): BlobStore {
 
 const BLOB_PATHNAME = "records.csv";
 
-export function vercelBlobStore(): BlobStore {
+/**
+ * The store's read-write token. Vercel names it BLOB_READ_WRITE_TOKEN by
+ * default, but creating the store with a custom env-var prefix produces
+ * e.g. MYSTORE_READ_WRITE_TOKEN — accept any of them.
+ */
+export function blobToken(): string | undefined {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return process.env.BLOB_READ_WRITE_TOKEN;
+  const key = Object.keys(process.env).find((k) => k.endsWith("_READ_WRITE_TOKEN"));
+  return key ? process.env[key] : undefined;
+}
+
+export function vercelBlobStore(token: string): BlobStore {
   return {
     async read() {
       const { head } = await import("@vercel/blob");
       let url: string;
       try {
-        const meta = await head(BLOB_PATHNAME);
+        const meta = await head(BLOB_PATHNAME, { token });
         url = meta.url;
       } catch (err: unknown) {
         if ((err as Error).name === "BlobNotFoundError") return null;
@@ -78,6 +89,7 @@ export function vercelBlobStore(): BlobStore {
         allowOverwrite: true,
         cacheControlMaxAge: 60,
         contentType: "text/csv",
+        token,
       });
     },
   };
@@ -95,8 +107,10 @@ function unconfiguredVercelStore(): BlobStore {
     },
     async write() {
       throw new Error(
-        "Storage is not configured on Vercel — open your project in the Vercel dashboard, " +
-          "go to Storage → Create Database → Blob, connect it to this project, then redeploy."
+        "Storage is not configured on Vercel — no *_READ_WRITE_TOKEN env var is set. " +
+          "In the Vercel dashboard: Storage → Create Database → Blob, connect it to this project. " +
+          "If the store is already connected, check Settings → Environment Variables for the " +
+          "token and REDEPLOY — the token only reaches deployments made after connecting."
       );
     },
   };
@@ -106,8 +120,9 @@ let defaultStore: BlobStore | null = null;
 
 export function getStore(): BlobStore {
   if (!defaultStore) {
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      defaultStore = vercelBlobStore();
+    const token = blobToken();
+    if (token) {
+      defaultStore = vercelBlobStore(token);
     } else if (process.env.VERCEL) {
       defaultStore = unconfiguredVercelStore();
     } else {
