@@ -67,13 +67,14 @@ export function blobToken(): string | undefined {
 export function vercelBlobStore(token: string): BlobStore {
   return {
     async read() {
-      const { head } = await import("@vercel/blob");
+      const { head, BlobNotFoundError } = await import("@vercel/blob");
       let url: string;
       try {
         const meta = await head(BLOB_PATHNAME, { token });
         url = meta.url;
       } catch (err: unknown) {
-        if ((err as Error).name === "BlobNotFoundError") return null;
+        // instanceof, not err.name — the SDK's error classes never set .name
+        if (err instanceof BlobNotFoundError) return null;
         throw err;
       }
       // unique query string busts the CDN cache so we never read stale data
