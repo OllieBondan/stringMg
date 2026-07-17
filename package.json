@@ -1,13 +1,14 @@
 {
   "name": "stringing-management",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bump": "node scripts/bump-version.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.6.1",

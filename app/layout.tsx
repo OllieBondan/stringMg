@@ -50,6 +50,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </header>
         <main className="mx-auto max-w-3xl px-3 py-4 pb-24">{children}</main>
+        <footer className="mx-auto max-w-3xl px-4 pb-6 text-center text-xs text-slate-400 dark:text-slate-500">
+          <Link href="/about" className="underline-offset-2 hover:underline">
+            Stringing Tracker v{process.env.NEXT_PUBLIC_APP_VERSION} · About
+          </Link>
+        </footer>
       </body>
     </html>
   );

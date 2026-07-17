@@ -107,3 +107,14 @@ npm run typecheck  # tsc --noEmit
   `data/records.sample.csv`, and the tests together
 - Run `npm test` and `npm run build` before considering a change done
 - Prefer small, reviewable diffs — show a plan before large refactors
+
+## Versioning
+
+- Semver lives in `package.json` and is shown on `/about` (with build date
+  and commit, injected via `next.config.ts`)
+- Before committing a set of changes, run `npm run bump` — it inspects
+  commit subjects since the last `v*` tag and picks major/minor/patch
+  (override with `npm run bump minor` etc.)
+- Commit the bumped `package.json` together with the changes, then:
+  `git tag v<version> && git push origin main --tags` — the tag is what the
+  next bump measures against
