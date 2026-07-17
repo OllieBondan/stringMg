@@ -5,46 +5,51 @@ Guidance for Claude Code when working in this repository.
 ## Project Overview
 
 A small mobile-first web app that tracks badminton racket stringing jobs
-through a fixed 6-step workflow (received from customer → to Titon → back from
-Titon → returned to owner → paid → payment forwarded to Tasya). Data volume is
-capped at ~2000 records, so we deliberately avoid a database engine.
-Persistence is a single CSV file.
+through a fixed 7-step workflow (received from customer → to Titon → back from
+Titon → returned to owner → paid → forwarded to Tasya → confirmed received by
+Tasya). Low volume (~2000 records), three users.
 
 - **Stack:** Next.js 15 (App Router) + TypeScript, Tailwind CSS 4
 - **Auth:** Auth.js (NextAuth v5), Google provider only, email allowlist
-  (`ALLOWED_EMAILS`)
-- **Storage:** one CSV file — Vercel Blob in production, `data/records.csv`
-  on disk in local dev/tests, both behind `lib/blobStore.ts`
+  (`ALLOWED_EMAILS`); only Tasya (`TASYA_EMAILS`) may confirm the final step
+- **Storage:** Neon Postgres (`DATABASE_URL`), via `@neondatabase/serverless`
+  — tables `jobs` and `deleted_jobs`, schema auto-created on first use
+  (`lib/db.ts`). Migrated from a CSV-in-Vercel-Blob design in v2.0.0.
 - **Hosting:** Vercel (GitHub repo: OllieBondan/stringMg)
 - **Tests:** Vitest
 
-## Why CSV, not a database
+## Storage history & rationale
 
-- Max ~2000 records, single-writer, low concurrency
-- No need for complex queries, joins, or transactions
-- Easy to inspect by hand, easy to back up, exports trivially to Google Sheets
-- If requirements grow (concurrent writers, >10k records, relational queries),
-  revisit this decision — don't prematurely add a DB before it's needed
+v1 stored everything in one CSV in Vercel Blob. That design's revisit trigger
+("if concurrent writers grow") fired: Blob's eventually-consistent reads with
+multiple serverless instances caused stale 404s, false conflicts, and flicker,
+requiring heavy CAS machinery. v2 moved to Neon Postgres: row-level atomic
+guarded updates make that entire bug class impossible. CSV remains the
+EXPORT format (download + Google Sheets), not the storage.
 
 ## Data Layer Rules
 
-- ALL CSV access goes through `lib/csvRepository.ts` — no file/blob I/O
-  scattered across the codebase
-- Always read the full file into memory, mutate, then write back atomically
-  (temp file + rename locally; single blob `put` on Vercel). Mutations are
-  serialized through the in-module lock (`withLock`)
-- Validate row shape on read; fail loudly (log + throw `MalformedCsvError`)
-  on malformed rows rather than silently skipping them
-- Keep the header row; column order is defined once in `CSV_HEADER`
-- Numeric-ish fields (tension) are stored and passed around as **strings** —
-  never parse them into floats for storage
-- One CSV file = one entity. A second entity would get a second file
-- CSV parsing/serialization uses csv-parse/csv-stringify — never hand-rolled
-  comma splitting
+- ALL data access goes through `lib/repository.ts` — no SQL scattered
+  across routes/components
+- Timestamps are stored as **ISO-8601 text**, never timestamptz — the
+  optimistic-concurrency check compares them for exact string equality, so
+  nothing may convert them on the way in or out
+- Mutations are optimistic-locked: full-row `UPDATE … WHERE id = ? AND
+  updated_at = <as read>`; zero rows updated ⇒ concurrent change ⇒ retry or
+  409. `expectedUpdatedAt` from the client detects user-level conflicts.
+- Numeric-ish fields (tension) are stored and passed around as **strings**
+- Deleting a job MOVES the row to `deleted_jobs` (single atomic CTE
+  statement) — never plain-delete records
 - Every mutation stamps `updated_at`/`updated_by`; each workflow step stores
-  its own `*_at`/`*_by` audit pair. Step order is defined once in
-  `STEPS` (`lib/types.ts`) — derive everything (status, next action, CSV
-  columns) from it
+  its own `*_at`/`*_by` audit pair. Step order is defined once in `STEPS`
+  (`lib/types.ts`) — derive everything (status, next action, columns) from it
+- Column set/order is defined once as `CSV_HEADER` (in `lib/csvRepository.ts`,
+  re-exported by the repository) and mirrors the DB columns — schema changes
+  must update `STEPS`/`CSV_HEADER`, the `lib/db.ts` CREATE TABLEs, and
+  `data/records.sample.csv` together
+- `lib/csvRepository.ts` + `lib/blobStore.ts` are LEGACY, kept only for the
+  one-time `/api/admin/import-csv?run=1` migration route (and its tests).
+  Remove all three together once the import is confirmed done in production.
 
 ## Project Structure
 
@@ -52,12 +57,13 @@ Persistence is a single CSV file.
 app/                 Pages (App Router) + API route handlers
   api/jobs/          List/create + per-job PATCH (advance/undo/updateSpecs)/DELETE
   api/export/        Creates a Google Sheet via the user's OAuth token
-  api/download/      Raw CSV download
+  api/download/      CSV download (generated from the DB)
+  api/admin/import-csv/  One-time legacy Blob CSV → Postgres import
 components/          Client components (JobList, JobForm, JobDetail, StatusBadge)
-lib/                 types.ts, options.ts, blobStore.ts, csvRepository.ts,
-                     auth.ts, session.ts, api.ts, format.ts
+lib/                 types.ts, options.ts, db.ts, repository.ts, permissions.ts,
+                     auth.ts, session.ts, api.ts, format.ts (+ legacy csvRepository/blobStore)
 data/
-  records.sample.csv Reference/sample data; the real file is never committed
+  records.sample.csv Reference/sample of the export schema
 ```
 
 ## Commands
@@ -75,15 +81,17 @@ npm run typecheck  # tsc --noEmit
   the Drive filesystem breaks `npm install` and `.next` writes. Work from a
   local clone; GitHub is the sync mechanism.
 - TypeScript must stay on **v5** (`typescript@5`) — Next 15 breaks with TS 7.
-- Windows: the local file store retries renames on EPERM/EBUSY; keep that.
+- `DATABASE_URL` (Neon) is required at runtime; without it the repository
+  throws a descriptive error. Local dev uses the same Neon DB as production —
+  there is no local database, so be deliberate with destructive testing.
 
 ## Testing
 
-- Unit test the repository against a temp-dir file store (never the real
-  data file) — see `lib/csvRepository.test.ts`
-- Cover: missing file, header-only file, malformed rows, quoting/escaping
-  round-trips, step advance/undo, stale-write conflicts, concurrent writes
-- Prefer testing through the repository functions, not file internals
+- Pure logic (steps/status/validation) is unit-tested; the SQL layer is
+  verified by driving the dev server end-to-end against the real Neon DB
+  (create → advance → conflict → delete), cleaning up test records after
+- Legacy CSV tests (`lib/csvRepository.test.ts`) stay green until the legacy
+  import path is removed
 
 ## Code Style
 
@@ -95,16 +103,13 @@ npm run typecheck  # tsc --noEmit
 
 ## What NOT to do
 
-- Don't introduce a database (embedded or otherwise) without discussing it
-  first — deliberate architectural choice, not an oversight
-- Don't add an ORM
+- Don't add an ORM — `@neondatabase/serverless` + explicit SQL is the ceiling
 - Don't broaden the Google OAuth scopes beyond `drive.file`
+- Don't store timestamps as anything but ISO text (see Data Layer Rules)
 - Don't over-engineer for scale this app won't reach
 
 ## Workflow Notes
 
-- If a change touches the CSV schema: update `CSV_HEADER`/`STEPS`,
-  `data/records.sample.csv`, and the tests together
 - Run `npm test` and `npm run build` before considering a change done
 - Prefer small, reviewable diffs — show a plan before large refactors
 

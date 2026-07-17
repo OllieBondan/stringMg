@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import JobForm from "@/components/JobForm";
-import { NotFoundError, getJobWithRetry } from "@/lib/csvRepository";
+import { NotFoundError, getJob } from "@/lib/repository";
 import { requireSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export default async function EditJobPage({ params }: { params: Promise<{ id: st
   await requireSessionUser();
   const { id } = await params;
   try {
-    const job = await getJobWithRetry(id);
+    const job = await getJob(id);
     return <JobForm initial={job} />;
   } catch (err) {
     if (err instanceof NotFoundError) notFound();

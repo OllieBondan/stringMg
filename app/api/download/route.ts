@@ -1,5 +1,5 @@
 import { requireUser, toErrorResponse } from "@/lib/api";
-import { rawCsv } from "@/lib/csvRepository";
+import { rawCsv } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 

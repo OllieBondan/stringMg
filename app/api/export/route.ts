@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser, toErrorResponse } from "@/lib/api";
-import { CSV_HEADER, listJobs } from "@/lib/csvRepository";
+import { CSV_HEADER, listJobs } from "@/lib/repository";
 import { STEPS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";

@@ -92,7 +92,7 @@ function rowToJob(row: string[], rowNumber: number): Job {
   };
 }
 
-function jobToRow(job: Job): string[] {
+export function jobToRow(job: Job): string[] {
   const stepCols = STEPS.flatMap((s) => {
     const stamp = job.steps[s.key];
     return [stamp?.at ?? "", stamp?.by ?? ""];

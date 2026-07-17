@@ -1,5 +1,5 @@
 import JobList from "@/components/JobList";
-import { listJobs } from "@/lib/csvRepository";
+import { listJobs } from "@/lib/repository";
 import { requireSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
