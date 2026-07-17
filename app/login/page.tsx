@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { signIn } from "@/lib/auth";
 import { getSessionUser } from "@/lib/session";
@@ -20,6 +21,13 @@ export default async function LoginPage({
   if (user) redirect("/");
   const { error } = await searchParams;
   const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]?.trim());
+
+  // The exact redirect URI Google will be given for this host — shown so
+  // redirect_uri_mismatch errors can be fixed by copy-pasting, not guessing.
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
+  const callbackUrl = host ? `${proto}://${host}/api/auth/callback/google` : null;
 
   return (
     <div className="flex flex-col items-center gap-6 pt-16 text-center">
@@ -64,6 +72,14 @@ export default async function LoginPage({
             Sign in with Google
           </button>
         </form>
+      )}
+      {callbackUrl && (
+        <p className="max-w-sm px-4 text-xs text-slate-400 dark:text-slate-500">
+          If Google shows <span className="font-mono">redirect_uri_mismatch</span>, add this exact
+          URL to the OAuth client&apos;s authorized redirect URIs:
+          <br />
+          <span className="select-all break-all font-mono">{callbackUrl}</span>
+        </p>
       )}
     </div>
   );
