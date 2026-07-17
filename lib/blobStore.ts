@@ -115,36 +115,59 @@ export function vercelBlobStore(token: string): BlobStore {
   return {
     async read() {
       const { head, get, BlobNotFoundError } = await import("@vercel/blob");
-      try {
-        // head() is an authenticated metadata call that works for both access
-        // modes — its not-found is the only trustworthy "store is empty".
-        await head(BLOB_PATHNAME, { token });
-      } catch (err: unknown) {
-        // instanceof, not err.name — the SDK's error classes never set .name
-        if (err instanceof BlobNotFoundError) {
-          // e.g. the very first write hasn't propagated yet
-          return lastWrite ? { content: lastWrite.content, etag: lastWrite.etag } : null;
+      // head() is an authenticated metadata call that works for both access
+      // modes — its not-found is the only trustworthy "store is empty", and
+      // its etag is the API-format version marker, the ONLY representation
+      // ifMatch accepts (get()'s HTTP etag header is a different one — using
+      // it made every conditional write fail).
+      const readMeta = async () => {
+        try {
+          return await head(BLOB_PATHNAME, { token });
+        } catch (err: unknown) {
+          // instanceof, not err.name — the SDK's error classes never set .name
+          if (err instanceof BlobNotFoundError) return null;
+          throw err;
         }
-        throw err;
+      };
+
+      let meta = await readMeta();
+      if (meta === null) {
+        // e.g. the very first write hasn't propagated yet
+        return lastWrite ? { content: lastWrite.content, etag: lastWrite.etag } : null;
       }
+
       // The blob exists: from here on a failed read must throw, never pass
       // for an empty store — a caller could otherwise overwrite real data.
+      let flipped = false;
       for (let attempt = 0; ; attempt++) {
+        let result;
         try {
-          const result = await get(BLOB_PATHNAME, { access, token, useCache: false });
-          if (!result || result.statusCode !== 200 || !result.stream) {
-            throw new Error(`records.csv exists but could not be read with ${access} access`);
-          }
-          const content = await new Response(result.stream).text();
-          if (lastWrite && lastWrite.at > result.blob.uploadedAt.getTime()) {
-            return { content: lastWrite.content, etag: lastWrite.etag };
-          }
-          lastWrite = null;
-          return { content, etag: result.blob.etag };
+          result = await get(BLOB_PATHNAME, { access, token, useCache: false });
         } catch (err) {
-          if (attempt > 0) throw err;
+          if (flipped) throw err;
+          flipped = true;
           flip();
+          continue;
         }
+        if (!result || result.statusCode !== 200 || !result.stream) {
+          throw new Error(`records.csv exists but could not be read with ${access} access`);
+        }
+        const content = await new Response(result.stream).text();
+        const contentAt = result.blob.uploadedAt.getTime();
+        if (lastWrite && lastWrite.at > contentAt) {
+          // this instance wrote more recently than the copy the read returned
+          return { content: lastWrite.content, etag: lastWrite.etag };
+        }
+        // Guard against pairing lagging content with a newer version marker
+        // (would let a conditional write based on stale data pass): retry
+        // briefly while the served content is older than the metadata says.
+        // 2s tolerance: last-modified has second precision, etags don't lag.
+        if (contentAt >= meta.uploadedAt.getTime() - 2000 || attempt >= 3) {
+          lastWrite = null;
+          return { content, etag: meta.etag };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        meta = (await readMeta()) ?? meta;
       }
     },
     async write(content: string, ifMatch?: string) {

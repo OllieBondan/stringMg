@@ -205,7 +205,12 @@ async function tryCommit(
     await writeAll(jobs, store ?? getStore(), etag);
     return true;
   } catch (err) {
-    if (err instanceof StoreConflictError) return false;
+    if (err instanceof StoreConflictError) {
+      console.warn(
+        `CSV conditional write rejected (ifMatch ${etag ? `${etag.slice(0, 16)}…` : "none"}) — retrying on fresh data`
+      );
+      return false;
+    }
     throw err;
   }
 }
