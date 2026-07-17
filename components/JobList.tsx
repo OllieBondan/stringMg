@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { formatDate, shortUser } from "@/lib/format";
 import { Job, JobStatus, STATUSES, statusRank } from "@/lib/types";
 import StatusBadge, { STATUS_LABELS } from "./StatusBadge";
+import { useFreshData } from "./useFreshData";
 
 type SortKey = "newest" | "oldest" | "customer" | "status";
 type GroupKey = "none" | "status" | "brand" | "customer";
@@ -32,6 +33,7 @@ const selectClass =
   "rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
 
 export default function JobList({ jobs }: { jobs: Job[] }) {
+  useFreshData();
   const [nameQuery, setNameQuery] = useState("");
   const [racketTypeFilter, setRacketTypeFilter] = useState<string>(ALL);
   const [statusFilter, setStatusFilter] = useState<JobStatus | typeof ALL>(ALL);

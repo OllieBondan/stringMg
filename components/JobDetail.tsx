@@ -2,16 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDateTime, shortUser } from "@/lib/format";
 import { Job, STEPS, lastCompletedStep, nextStep } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
+import { useFreshData } from "./useFreshData";
 
 export default function JobDetail({ job: initialJob }: { job: Job }) {
+  useFreshData();
   const router = useRouter();
   const [job, setJob] = useState(initialJob);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Adopt fresh server data when router.refresh() re-renders this page —
+  // useState's initial value alone would keep showing the stale job.
+  useEffect(() => setJob(initialJob), [initialJob]);
 
   const next = nextStep(job);
   const last = lastCompletedStep(job);
