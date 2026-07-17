@@ -19,7 +19,19 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (devBypassEnabled()) {
     return { email: "dev@local", name: "Dev User" };
   }
-  const session = await auth();
+  let session;
+  try {
+    session = await auth();
+  } catch (err) {
+    // Next.js uses thrown errors with a digest for control flow
+    // (redirects, dynamic-rendering bailouts) — always let those through.
+    if (typeof (err as { digest?: unknown })?.digest === "string") throw err;
+    // Misconfiguration (e.g. missing AUTH_SECRET) must not crash pages —
+    // treat it as "not signed in" so the user lands on /login, which
+    // explains exactly which env vars are missing.
+    console.error("Auth configuration error", err);
+    return null;
+  }
   if (!session?.user?.email) return null;
   return {
     email: session.user.email,

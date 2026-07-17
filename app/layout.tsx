@@ -6,7 +6,7 @@ import ThemeToggle, { THEME_INIT_SCRIPT } from "@/components/ThemeToggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "String Management",
+  title: "Stringing Tracker",
   description: "Badminton racket stringing tracker",
 };
 
