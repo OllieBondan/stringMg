@@ -29,6 +29,29 @@ function SelectWithOther({
 }) {
   const isPreset = value === "" || options.includes(value);
   const [other, setOther] = useState(!isPreset);
+  const inputClass =
+    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
+
+  // No preset list (e.g. type/series of a custom brand): plain text input,
+  // no pointless empty dropdown in between.
+  if (options.length === 0) {
+    return (
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+          {label}
+        </span>
+        <input
+          type="text"
+          value={value}
+          required={required}
+          placeholder={`Type the ${label.toLowerCase()}`}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputClass}
+        />
+      </label>
+    );
+  }
+
   const selectValue = other ? OTHER : value;
   return (
     <label className="block">
@@ -47,7 +70,7 @@ function SelectWithOther({
             onChange(e.target.value);
           }
         }}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        className={inputClass}
       >
         <option value="" disabled>
           Select…
@@ -57,16 +80,17 @@ function SelectWithOther({
             {o}
           </option>
         ))}
-        <option value={OTHER}>Other…</option>
+        <option value={OTHER}>Other — type it in…</option>
       </select>
       {other && (
         <input
           type="text"
           value={value}
           required={required}
-          placeholder={`${label} (type here)`}
+          autoFocus
+          placeholder={`Type the ${label.toLowerCase()}`}
           onChange={(e) => onChange(e.target.value)}
-          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className={`mt-2 ${inputClass}`}
         />
       )}
     </label>
