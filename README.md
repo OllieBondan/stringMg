@@ -73,9 +73,10 @@ Google accounts allowed to sign in.
 4. Deploy, then add the production callback URL to the Google OAuth client
    (step 1.2 above) using your real Vercel domain.
 
-> Note: Vercel Blob serves files over public (unguessable) URLs. The CSV holds
-> customer names and racket specs — low sensitivity — but don't put anything
-> secret in it.
+> Note: both public and private Blob stores are supported (the app detects
+> the store's access mode automatically). Prefer a **private** store — the
+> CSV holds customer names. On a public store the file is served over an
+> unguessable but public URL.
 
 ## How data is stored
 

@@ -65,33 +65,59 @@ export function blobToken(): string | undefined {
 }
 
 export function vercelBlobStore(token: string): BlobStore {
+  // A store is created as either public or private and every call must pass
+  // the matching access mode. There is no API to ask which one it is, so we
+  // assume public and flip permanently on the first mismatch error.
+  let access: "public" | "private" = "public";
+  const flip = () => (access = access === "public" ? "private" : "public");
+  const accessMismatch = (err: unknown) =>
+    err instanceof Error && /access on a (private|public) store/i.test(err.message);
+
   return {
     async read() {
-      const { head, BlobNotFoundError } = await import("@vercel/blob");
-      let url: string;
+      const { head, get, BlobNotFoundError } = await import("@vercel/blob");
       try {
-        const meta = await head(BLOB_PATHNAME, { token });
-        url = meta.url;
+        // head() is an authenticated metadata call that works for both access
+        // modes — its not-found is the only trustworthy "store is empty".
+        await head(BLOB_PATHNAME, { token });
       } catch (err: unknown) {
         // instanceof, not err.name — the SDK's error classes never set .name
         if (err instanceof BlobNotFoundError) return null;
         throw err;
       }
-      // unique query string busts the CDN cache so we never read stale data
-      const res = await fetch(`${url}?ts=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Failed to read blob: HTTP ${res.status}`);
-      return res.text();
+      // The blob exists: from here on a failed read must throw, never pass
+      // for an empty store — a caller could otherwise overwrite real data.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const result = await get(BLOB_PATHNAME, { access, token, useCache: false });
+          if (!result || result.statusCode !== 200 || !result.stream) {
+            throw new Error(`records.csv exists but could not be read with ${access} access`);
+          }
+          return await new Response(result.stream).text();
+        } catch (err) {
+          if (attempt > 0) throw err;
+          flip();
+        }
+      }
     },
     async write(content: string) {
       const { put } = await import("@vercel/blob");
-      await put(BLOB_PATHNAME, content, {
-        access: "public",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        cacheControlMaxAge: 60,
-        contentType: "text/csv",
-        token,
-      });
+      const doPut = () =>
+        put(BLOB_PATHNAME, content, {
+          access,
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          cacheControlMaxAge: 60,
+          contentType: "text/csv",
+          token,
+        });
+      try {
+        await doPut();
+      } catch (err) {
+        if (!accessMismatch(err)) throw err;
+        flip();
+        await doPut();
+      }
     },
   };
 }
