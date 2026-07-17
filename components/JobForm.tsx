@@ -3,7 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toDateInputValue } from "@/lib/format";
-import { COLORS, RACKET_BRANDS, RACKET_TYPES, STRING_TYPES, TENSION_RANGE } from "@/lib/options";
+import {
+  COLORS,
+  RACKET_BRANDS,
+  STRING_TYPES,
+  TENSION_RANGE,
+  racketTypesForBrand,
+} from "@/lib/options";
 import { Job, JobSpecs, TENSION_UNITS, TensionUnit } from "@/lib/types";
 
 const OTHER = "__other__";
@@ -222,12 +228,22 @@ export default function JobForm({ initial }: { initial?: Job }) {
             label="Brand"
             options={RACKET_BRANDS}
             value={specs.racketBrand}
-            onChange={set("racketBrand")}
+            onChange={(brand) =>
+              // switching brand invalidates a type that isn't in its line-up
+              setSpecs((s) => ({
+                ...s,
+                racketBrand: brand,
+                racketType: racketTypesForBrand(brand).includes(s.racketType)
+                  ? s.racketType
+                  : "",
+              }))
+            }
             required
           />
           <SelectWithOther
+            key={specs.racketBrand}
             label="Type / series"
-            options={RACKET_TYPES}
+            options={racketTypesForBrand(specs.racketBrand)}
             value={specs.racketType}
             onChange={set("racketType")}
           />

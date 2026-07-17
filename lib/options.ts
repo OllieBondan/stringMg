@@ -3,30 +3,47 @@
  * text in the CSV, so changing a list never breaks existing records.
  */
 
-export const RACKET_BRANDS = [
-  "Yonex",
-  "Victor",
-  "Li-Ning",
-  "Apacs",
-  "Mizuno",
-  "Felet",
-] as const;
+/** Racket type/series per brand — the form only offers types of the chosen brand. */
+export const RACKET_TYPES_BY_BRAND: Record<string, readonly string[]> = {
+  Yonex: [
+    "Astrox",
+    "Nanoflare",
+    "Arcsaber",
+    "Duora",
+    "Voltric",
+    "Nanoray",
+    "Muscle Power",
+    "Carbonex",
+  ],
+  Victor: [
+    "Thruster",
+    "Auraspeed",
+    "Jetspeed",
+    "DriveX",
+    "Brave Sword",
+    "Hypernano X",
+    "Meteor X",
+  ],
+  "Li-Ning": [
+    "Axforce",
+    "Bladex",
+    "Halbertec",
+    "Tectonic",
+    "Aeronaut",
+    "Windstorm",
+    "Turbo Charging",
+  ],
+  Apacs: ["Feather Weight", "Lethal", "Z-Ziggler", "Virtuoso", "Nano Fusion"],
+  Mizuno: ["Fortius", "Altius", "Acrospeed", "Caliber"],
+  Felet: ["TJ Power", "The Legend", "Woven"],
+};
 
-export const RACKET_TYPES = [
-  "Astrox",
-  "Nanoflare",
-  "Arcsaber",
-  "Duora",
-  "Voltric",
-  "Nanoray",
-  "Auraspeed",
-  "Thruster",
-  "Brave Sword",
-  "Jetspeed",
-  "Axforce",
-  "Bladex",
-  "Halbertec",
-] as const;
+export const RACKET_BRANDS: readonly string[] = Object.keys(RACKET_TYPES_BY_BRAND);
+
+/** Types for a brand; empty for unknown/custom brands (form falls back to free text). */
+export function racketTypesForBrand(brand: string): readonly string[] {
+  return RACKET_TYPES_BY_BRAND[brand] ?? [];
+}
 
 export const COLORS = [
   "Black",
