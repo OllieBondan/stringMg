@@ -80,6 +80,12 @@ export interface Job {
   updatedBy: string;
 }
 
+/**
+ * What the intake/edit form submits: the specs plus an optional received
+ * date (YYYY-MM-DD) that sets/corrects the step-1 "received" stamp.
+ */
+export type JobSpecsInput = JobSpecs & { receivedDate?: string };
+
 /** Editable intake/spec fields (everything except id, status, steps, audit). */
 export interface JobSpecs {
   customerName: string;

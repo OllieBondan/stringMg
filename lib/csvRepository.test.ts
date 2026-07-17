@@ -156,4 +156,35 @@ describe("csvRepository", () => {
     await expect(createJob({ ...SPECS, customerName: "  " }, "a@b.c", store)).rejects.toThrow();
     await expect(createJob({ ...SPECS, tensionValue: "abc" }, "a@b.c", store)).rejects.toThrow();
   });
+
+  it("backfills the received stamp when a past date is given", async () => {
+    const job = await createJob({ ...SPECS, receivedDate: "2026-07-01" }, "a@b.c", store);
+    expect(job.steps.received?.at).toBe("2026-07-01T12:00:00.000Z");
+    const read = await getJob(job.id, store);
+    expect(read.steps.received?.at).toBe("2026-07-01T12:00:00.000Z");
+  });
+
+  it("keeps the exact time when the received date is today", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const job = await createJob({ ...SPECS, receivedDate: today }, "a@b.c", store);
+    expect(job.steps.received?.at).toBe(job.createdAt);
+  });
+
+  it("corrects the received date via updateSpecs, preserving who received it", async () => {
+    const job = await createJob(SPECS, "receiver@b.c", store);
+    const updated = await updateSpecs(
+      job.id,
+      { ...SPECS, receivedDate: "2026-06-15" },
+      "editor@b.c",
+      job.updatedAt,
+      store
+    );
+    expect(updated.steps.received).toEqual({ at: "2026-06-15T12:00:00.000Z", by: "receiver@b.c" });
+  });
+
+  it("rejects a malformed received date", async () => {
+    await expect(
+      createJob({ ...SPECS, receivedDate: "01-07-2026" }, "a@b.c", store)
+    ).rejects.toThrow("Invalid received date");
+  });
 });

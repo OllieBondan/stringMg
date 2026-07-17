@@ -4,6 +4,7 @@ import { BlobStore, getStore } from "./blobStore";
 import {
   Job,
   JobSpecs,
+  JobSpecsInput,
   JobStatus,
   STATUSES,
   STEPS,
@@ -172,7 +173,20 @@ function validateSpecs(specs: JobSpecs): void {
   }
 }
 
-export async function createJob(specs: JobSpecs, user: string, store?: BlobStore): Promise<Job> {
+/**
+ * ISO stamp for the "received" step. A backfilled calendar day is stored as
+ * noon UTC so it renders as that same date in any timezone; the current day
+ * keeps the exact time.
+ */
+function receivedStamp(receivedDate: string | undefined, fallbackIso: string): string {
+  if (!receivedDate) return fallbackIso;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) throw new Error("Invalid received date");
+  if (fallbackIso.slice(0, 10) === receivedDate) return fallbackIso;
+  return `${receivedDate}T12:00:00.000Z`;
+}
+
+export async function createJob(input: JobSpecsInput, user: string, store?: BlobStore): Promise<Job> {
+  const { receivedDate, ...specs } = input;
   validateSpecs(specs);
   const now = new Date().toISOString();
   const job: Job = {
@@ -182,7 +196,7 @@ export async function createJob(specs: JobSpecs, user: string, store?: BlobStore
     ...specs,
     customerName: specs.customerName.trim(),
     status: "RECEIVED",
-    steps: { received: { at: now, by: user } },
+    steps: { received: { at: receivedStamp(receivedDate, now), by: user } },
     updatedAt: now,
     updatedBy: user,
   };
@@ -219,13 +233,29 @@ async function mutateJob(
 
 export async function updateSpecs(
   id: string,
-  specs: JobSpecs,
+  input: JobSpecsInput,
   user: string,
   expectedUpdatedAt?: string,
   store?: BlobStore
 ): Promise<Job> {
+  const { receivedDate, ...specs } = input;
   validateSpecs(specs);
-  return mutateJob(id, expectedUpdatedAt, (job) => Object.assign(job, specs), user, store);
+  return mutateJob(
+    id,
+    expectedUpdatedAt,
+    (job) => {
+      Object.assign(job, specs);
+      if (receivedDate) {
+        const current = job.steps.received;
+        job.steps.received = {
+          at: receivedStamp(receivedDate, current?.at ?? new Date().toISOString()),
+          by: current?.by ?? user,
+        };
+      }
+    },
+    user,
+    store
+  );
 }
 
 export async function advanceStep(

@@ -83,13 +83,36 @@ export function vercelBlobStore(): BlobStore {
   };
 }
 
+/**
+ * On Vercel without a connected Blob store the filesystem fallback can't work
+ * (read-only lambda), so reads act empty and writes explain the actual fix
+ * instead of surfacing ENOENT from /var/task.
+ */
+function unconfiguredVercelStore(): BlobStore {
+  return {
+    async read() {
+      return null;
+    },
+    async write() {
+      throw new Error(
+        "Storage is not configured on Vercel — open your project in the Vercel dashboard, " +
+          "go to Storage → Create Database → Blob, connect it to this project, then redeploy."
+      );
+    },
+  };
+}
+
 let defaultStore: BlobStore | null = null;
 
 export function getStore(): BlobStore {
   if (!defaultStore) {
-    defaultStore = process.env.BLOB_READ_WRITE_TOKEN
-      ? vercelBlobStore()
-      : localFileStore(path.join(process.cwd(), "data", "records.csv"));
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      defaultStore = vercelBlobStore();
+    } else if (process.env.VERCEL) {
+      defaultStore = unconfiguredVercelStore();
+    } else {
+      defaultStore = localFileStore(path.join(process.cwd(), "data", "records.csv"));
+    }
   }
   return defaultStore;
 }

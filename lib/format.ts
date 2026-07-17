@@ -22,3 +22,8 @@ export function formatDate(iso: string): string {
 export function shortUser(email: string): string {
   return email.split("@")[0];
 }
+
+/** YYYY-MM-DD in the local timezone, for <input type="date"> values. */
+export function toDateInputValue(iso?: string): string {
+  return (iso ? new Date(iso) : new Date()).toLocaleDateString("en-CA");
+}

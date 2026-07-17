@@ -11,9 +11,12 @@ type GroupKey = "none" | "status" | "brand" | "customer";
 
 const ALL = "";
 
+/** Job's business date: when the racket was received (falls back to creation). */
+const jobDate = (j: Job) => j.steps.received?.at ?? j.createdAt;
+
 const SORTERS: Record<SortKey, (a: Job, b: Job) => number> = {
-  newest: (a, b) => b.createdAt.localeCompare(a.createdAt),
-  oldest: (a, b) => a.createdAt.localeCompare(b.createdAt),
+  newest: (a, b) => jobDate(b).localeCompare(jobDate(a)),
+  oldest: (a, b) => jobDate(a).localeCompare(jobDate(b)),
   customer: (a, b) => a.customerName.localeCompare(b.customerName),
   status: (a, b) => statusRank(a.status) - statusRank(b.status),
 };
@@ -227,7 +230,7 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
                       {job.tensionValue && ` @ ${job.tensionValue} ${job.tensionUnit}`}
                     </span>
                     <span className="whitespace-nowrap" suppressHydrationWarning>
-                      {formatDate(job.createdAt)} · {shortUser(job.createdBy)}
+                      {formatDate(jobDate(job))} · {shortUser(job.createdBy)}
                     </span>
                   </div>
                 </Link>
