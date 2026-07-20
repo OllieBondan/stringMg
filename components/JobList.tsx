@@ -363,19 +363,6 @@ export default function JobList({
               </option>
             ))}
           </select>
-          <label
-            title="Only jobs with notes"
-            className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-          >
-            <input
-              type="checkbox"
-              checked={notesOnly}
-              onChange={(e) => setNotesOnly(e.target.checked)}
-              aria-label="Only jobs with notes"
-              className="h-4 w-4 accent-emerald-600"
-            />
-            📝
-          </label>
           {filtersActive && (
             <button
               onClick={clearFilters}
@@ -428,6 +415,19 @@ export default function JobList({
             </select>
           </span>
         </div>
+        <label
+          title="Only jobs with notes"
+          className="flex w-fit items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+        >
+          <input
+            type="checkbox"
+            checked={notesOnly}
+            onChange={(e) => setNotesOnly(e.target.checked)}
+            aria-label="Only jobs with notes"
+            className="h-4 w-4 accent-emerald-600"
+          />
+          📝 Only jobs with notes
+        </label>
       </div>
 
       {selectMode && (
