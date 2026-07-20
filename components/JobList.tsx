@@ -48,6 +48,7 @@ export default function JobList({
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [openNotesId, setOpenNotesId] = useState<string | null>(null);
 
   // The job's headline date: when it was received (active list) or when it
   // left the active list (history) — falls back sensibly either way.
@@ -237,6 +238,8 @@ export default function JobList({
   }
 
   function renderCardBody(job: JobWithArchive) {
+    const notesOpen = openNotesId === job.id;
+    const toggleNotes = () => setOpenNotesId((cur) => (cur === job.id ? null : job.id));
     return (
       <>
         <div className="flex items-center justify-between gap-2">
@@ -246,17 +249,20 @@ export default function JobList({
               <span
                 role="button"
                 tabIndex={0}
-                aria-label="This job has notes — view them"
+                aria-label="This job has notes — hover or tap to preview"
+                aria-expanded={notesOpen}
+                onMouseEnter={() => setOpenNotesId(job.id)}
+                onMouseLeave={() => setOpenNotesId((cur) => (cur === job.id ? null : cur))}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  router.push(`/jobs/${job.id}#notes`);
+                  toggleNotes();
                 }}
                 onKeyDown={(e) => {
                   if (e.key !== "Enter" && e.key !== " ") return;
                   e.preventDefault();
                   e.stopPropagation();
-                  router.push(`/jobs/${job.id}#notes`);
+                  toggleNotes();
                 }}
                 className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs leading-none text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
               >
@@ -266,6 +272,29 @@ export default function JobList({
           </span>
           <StatusBadge status={job.status} />
         </div>
+        {notesOpen && (
+          <div className="mt-1.5 rounded-lg bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+            <p className="whitespace-pre-wrap">{job.notes}</p>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push(`/jobs/${job.id}#notes`);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                e.stopPropagation();
+                router.push(`/jobs/${job.id}#notes`);
+              }}
+              className="mt-1 inline-block font-medium underline-offset-2 hover:underline"
+            >
+              View entry →
+            </span>
+          </div>
+        )}
         <div className="mt-1 truncate text-sm text-slate-600 dark:text-slate-300">
           {[job.racketBrand, job.racketType, job.racketColor].filter(Boolean).join(" · ")}
         </div>
