@@ -21,7 +21,7 @@ function monthLabel(iso: string): string {
 }
 
 const selectClass =
-  "rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
+  "shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
@@ -285,14 +285,14 @@ export default function JobList({
           placeholder="Filter by customer name…"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <select
             value={racketBrandFilter}
             onChange={(e) => setRacketBrandFilter(e.target.value)}
             className={selectClass}
             aria-label="Filter by racket brand"
           >
-            <option value={ALL}>All racket brands</option>
+            <option value={ALL}>Brand</option>
             {racketBrandOptions.map((b) => (
               <option key={b} value={b}>
                 {b}
@@ -305,7 +305,7 @@ export default function JobList({
             className={selectClass}
             aria-label="Filter by racket type"
           >
-            <option value={ALL}>All racket types</option>
+            <option value={ALL}>Type</option>
             {racketTypeOptions.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -318,28 +318,28 @@ export default function JobList({
             className={selectClass}
             aria-label="Filter by status"
           >
-            <option value={ALL}>All statuses</option>
+            <option value={ALL}>Status</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
                 {STATUS_LABELS[s]}
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+          <label className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
             <input
               type="checkbox"
               checked={notesOnly}
               onChange={(e) => setNotesOnly(e.target.checked)}
               className="h-4 w-4 accent-emerald-600"
             />
-            📝 Has notes
+            📝 Notes
           </label>
           {filtersActive && (
             <button
               onClick={clearFilters}
-              className="text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+              className="shrink-0 text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
             >
-              Clear filters
+              Clear
             </button>
           )}
           {variant === "active" && (
@@ -351,7 +351,7 @@ export default function JobList({
                   ? "Select jobs to advance them together"
                   : "Filter by a status (not Done) to enable bulk actions"
               }
-              className={`rounded-lg border px-2 py-2 text-sm font-medium disabled:opacity-40 ${
+              className={`shrink-0 rounded-lg border px-2 py-2 text-sm font-medium disabled:opacity-40 ${
                 selectMode
                   ? "border-emerald-600 bg-emerald-600 text-white"
                   : "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
@@ -360,7 +360,7 @@ export default function JobList({
               {selectMode ? "Cancel select" : "Select"}
             </button>
           )}
-          <span className="ms-auto flex items-center gap-2">
+          <span className="ms-auto flex shrink-0 items-center gap-2">
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
