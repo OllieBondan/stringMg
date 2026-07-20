@@ -67,7 +67,10 @@ export default function JobList({
     if (key === "status") return STATUS_LABELS[job.status];
     if (key === "brand") return job.racketBrand || "(no brand)";
     if (key === "customer") return job.customerName;
-    if (key === "month") return monthLabel(dateOf(job));
+    // updatedAt, not dateOf/archivedAt — archiving happens as one batch
+    // action, so grouping by archive date would collapse many months of
+    // real completion history into whichever day "Archive" was last clicked.
+    if (key === "month") return monthLabel(job.updatedAt);
     return "";
   }
 
@@ -480,12 +483,35 @@ export default function JobList({
         </p>
       )}
 
-      {groups.map(([label, groupJobs]) => (
+      {groups.map(([label, groupJobs]) => {
+        // Month groups answer "how many did X get strung last month" too:
+        // a per-customer tally under the header, tap a name to drill in.
+        const customerTally =
+          group === "month"
+            ? [...groupJobs.reduce((map, j) => map.set(j.customerName, (map.get(j.customerName) ?? 0) + 1), new Map<string, number>())].sort(
+                (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+              )
+            : null;
+        return (
         <section key={label || "all"}>
           {label && (
             <h2 className="sticky top-14 z-10 -mx-1 mb-1 rounded bg-slate-100/95 px-1 py-1 text-sm font-semibold text-slate-600 backdrop-blur dark:bg-slate-900/95 dark:text-slate-300">
               {label} <span className="font-normal text-slate-400 dark:text-slate-500">({groupJobs.length})</span>
             </h2>
+          )}
+          {customerTally && customerTally.length > 0 && (
+            <p className="mb-1.5 flex flex-wrap gap-x-1 gap-y-0.5 px-1 text-xs text-slate-500 dark:text-slate-400">
+              {customerTally.map(([name, n]) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setNameQuery(name)}
+                  className="rounded hover:text-emerald-700 hover:underline dark:hover:text-emerald-400"
+                >
+                  {name} ({n})
+                </button>
+              ))}
+            </p>
           )}
           <ul className="flex flex-col gap-2">
             {groupJobs.map((job) => (
@@ -525,7 +551,8 @@ export default function JobList({
             ))}
           </ul>
         </section>
-      ))}
+        );
+      })}
 
       {variant === "active" && (
         <Link
