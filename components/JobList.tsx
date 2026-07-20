@@ -294,7 +294,7 @@ export default function JobList({
           placeholder="Filter by customer name…"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
         />
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 pr-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <select
             value={racketBrandFilter}
             onChange={(e) => setRacketBrandFilter(e.target.value)}
@@ -373,31 +373,31 @@ export default function JobList({
               {selectMode ? "Cancel select" : "Select"}
             </button>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className={selectClass}
-            aria-label="Sort"
-          >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="customer">By customer</option>
-            <option value="status">By status</option>
-          </select>
-          <select
-            value={group}
-            onChange={(e) => setGroup(e.target.value as GroupKey)}
-            className={selectClass}
-            aria-label="Group"
-          >
-            <option value="none">No grouping</option>
-            <option value="status">Group: status</option>
-            <option value="brand">Group: brand</option>
-            <option value="customer">Group: customer</option>
-            {variant === "history" && <option value="month">Group: month</option>}
-          </select>
+          <span className="ms-auto flex shrink-0 items-center gap-2">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className={selectClass}
+              aria-label="Sort"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="customer">By customer</option>
+              <option value="status">By status</option>
+            </select>
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value as GroupKey)}
+              className={selectClass}
+              aria-label="Group"
+            >
+              <option value="none">No grouping</option>
+              <option value="status">Group: status</option>
+              <option value="brand">Group: brand</option>
+              <option value="customer">Group: customer</option>
+              {variant === "history" && <option value="month">Group: month</option>}
+            </select>
+          </span>
         </div>
       </div>
 
