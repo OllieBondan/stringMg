@@ -2,11 +2,11 @@ import { JobStatus } from "@/lib/types";
 
 export const STATUS_LABELS: Record<JobStatus, string> = {
   RECEIVED: "Received",
-  WITH_TITON: "With Titon",
+  WITH_TITON: "Being Strung",
   STRUNG: "Strung",
-  RETURNED: "Returned",
-  PAID: "Paid",
-  FORWARDED: "Forwarded",
+  RETURNED: "Returned, waiting for payment",
+  PAID: "Payment Received",
+  FORWARDED: "Payment Forwarded",
   DONE: "Done",
 };
 
