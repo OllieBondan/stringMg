@@ -92,6 +92,12 @@ npm run typecheck  # tsc --noEmit
   the Drive filesystem breaks `npm install` and `.next` writes. Work from a
   local clone; GitHub is the sync mechanism.
 - TypeScript must stay on **v5** (`typescript@5`) — Next 15 breaks with TS 7.
+- **Volume test data**: `node scripts/seed-test-data.mjs [count]` (dry run —
+  prints the target host, writes nothing) / `--force` to actually insert.
+  NEVER run `--force` against production — point `.env.local`'s
+  `DATABASE_URL` at a disposable **Neon branch** first (Neon console →
+  Branches → create one from production, copy its connection string). The
+  script always prints the target host so this is easy to double-check.
 - `DATABASE_URL` (Neon) is required at runtime; without it the repository
   throws a descriptive error. Local dev uses the same Neon DB as production —
   there is no local database, so be deliberate with destructive testing.
