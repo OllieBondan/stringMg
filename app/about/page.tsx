@@ -4,7 +4,11 @@ export const dynamic = "force-dynamic";
 
 /** Public page — contains no record data, so it is excluded from the auth wall. */
 export default function AboutPage() {
-  const version = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
+  const rawVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
+  const [versionCore, prerelease] = rawVersion.split("-");
+  const version = prerelease
+    ? `${versionCore} ${prerelease[0].toUpperCase()}${prerelease.slice(1)}`
+    : versionCore;
   const buildDate = process.env.NEXT_PUBLIC_BUILD_DATE;
   const sha = process.env.NEXT_PUBLIC_COMMIT_SHA;
 
@@ -61,7 +65,7 @@ export default function AboutPage() {
       </div>
 
       <p className="max-w-sm text-xs text-slate-400 dark:text-slate-500">
-        Records are kept in a single CSV file in Vercel Blob storage, exportable to Google Sheets.
+        Records are kept in Neon Postgres, exportable as CSV or to Google Sheets.
         Built with Next.js — developed with Claude Code.
       </p>
 

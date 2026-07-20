@@ -51,7 +51,15 @@ if (forced) {
   bump = "patch";
 }
 
-let [major, minor, patch] = pkg.version.split(".").map(Number);
+// Tolerates an optional prerelease suffix (e.g. "0.1.1-beta") on the current
+// version, but a bump always produces a clean major.minor.patch — it doesn't
+// re-append the suffix, since a bump means moving forward past that baseline.
+const versionMatch = pkg.version.match(/^(\d+)\.(\d+)\.(\d+)/);
+if (!versionMatch) {
+  console.error(`package.json version "${pkg.version}" is not parseable semver`);
+  process.exit(1);
+}
+let [major, minor, patch] = versionMatch.slice(1).map(Number);
 if (bump === "major") [major, minor, patch] = [major + 1, 0, 0];
 else if (bump === "minor") [minor, patch] = [minor + 1, 0];
 else patch += 1;

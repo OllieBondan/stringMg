@@ -1,11 +1,14 @@
 import JobList from "@/components/JobList";
-import { listJobs } from "@/lib/repository";
+import { countArchivable, listJobs } from "@/lib/repository";
+import { isTasya } from "@/lib/permissions";
 import { requireSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  await requireSessionUser();
-  const jobs = await listJobs();
-  return <JobList jobs={jobs} />;
+  const user = await requireSessionUser();
+  const [jobs, archivableCount] = await Promise.all([listJobs(), countArchivable()]);
+  return (
+    <JobList jobs={jobs} canConfirmTasya={isTasya(user.email)} archivableCount={archivableCount} />
+  );
 }

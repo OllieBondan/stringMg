@@ -40,6 +40,14 @@ EXPORT format (download + Google Sheets), not the storage.
 - Numeric-ish fields (tension) are stored and passed around as **strings**
 - Deleting a job MOVES the row to `deleted_jobs` (single atomic CTE
   statement) — never plain-delete records
+- Archiving (jobs DONE for >30 days) sets `archived_at`/`archived_by` on the
+  SAME row (no move) — the active list filters `WHERE archived_at IS NULL`,
+  `/history` shows the rest. CSV/Sheets export includes both (never filters
+  on `archived_at`); only `deleted_jobs` is excluded from exports
+- Bulk advance (`bulkAdvance` in `lib/repository.ts`) re-checks each job's
+  current status before advancing it and skips (never forces) a job that
+  moved on since the client read it — never trust a client-supplied status
+  for more than "what I filtered by"
 - Every mutation stamps `updated_at`/`updated_by`; each workflow step stores
   its own `*_at`/`*_by` audit pair. Step order is defined once in `STEPS`
   (`lib/types.ts`) — derive everything (status, next action, columns) from it
@@ -56,9 +64,12 @@ EXPORT format (download + Google Sheets), not the storage.
 ```
 app/                 Pages (App Router) + API route handlers
   api/jobs/          List/create + per-job PATCH (advance/undo/updateSpecs)/DELETE
+  api/jobs/bulk-advance/  Advance many same-status jobs one step at once
+  api/jobs/archive-old/   Move DONE jobs completed >30 days ago into history
   api/export/        Creates a Google Sheet via the user's OAuth token
-  api/download/      CSV download (generated from the DB)
+  api/download/      CSV download (generated from the DB, active + archived)
   api/admin/import-csv/  One-time legacy Blob CSV → Postgres import
+  history/           Archived-jobs page (JobList in "history" variant)
 components/          Client components (JobList, JobForm, JobDetail, StatusBadge)
 lib/                 types.ts, options.ts, db.ts, repository.ts, permissions.ts,
                      auth.ts, session.ts, api.ts, format.ts (+ legacy csvRepository/blobStore)
@@ -123,3 +134,6 @@ npm run typecheck  # tsc --noEmit
 - Commit the bumped `package.json` together with the changes, then:
   `git tag v<version> && git push origin main --tags` — the tag is what the
   next bump measures against
+- Versioning was reset to `0.1.1-beta` on 2026-07-18 (app entering active
+  beta testing with the three real users) — earlier `v1.x`/`v2.x` tags in
+  history predate the reset and are not part of the current sequence

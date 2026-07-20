@@ -76,16 +76,23 @@ export default function JobDetail({
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex gap-2">
+        <Link
+          href="/jobs/new"
+          className="flex-1 rounded-lg border border-emerald-600 px-3 py-2 text-center text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+        >
+          + Add another racket
+        </Link>
+        <Link
+          href="/"
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50"
+        >
+          🏠 Main menu
+        </Link>
+      </div>
+
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <Link
-            href="/"
-            className="text-sm text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-          >
-            ← All records
-          </Link>
-          <h1 className="mt-1 text-xl font-bold">{job.customerName}</h1>
-        </div>
+        <h1 className="text-xl font-bold">{job.customerName}</h1>
         <StatusBadge status={job.status} />
       </div>
 

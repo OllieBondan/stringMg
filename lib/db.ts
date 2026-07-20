@@ -54,6 +54,13 @@ const DELETED_TABLE_SQL = JOBS_TABLE_SQL.replace(
   "updated_by text NOT NULL,\n  deleted_at text NOT NULL,\n  deleted_by text NOT NULL\n)"
 );
 
+// archived_at/by: set when a completed job is moved out of the active list
+// into history (see repository.ts archiveOldCompleted). NULL = still active.
+const ARCHIVE_COLUMN_SQL = `
+ALTER TABLE jobs
+  ADD COLUMN IF NOT EXISTS archived_at text,
+  ADD COLUMN IF NOT EXISTS archived_by text`;
+
 let schemaReady: Promise<void> | null = null;
 
 /** Creates the tables on first use (idempotent, cached per process). */
@@ -63,6 +70,7 @@ export function ensureSchema(): Promise<void> {
       const sql = db();
       await sql.query(JOBS_TABLE_SQL);
       await sql.query(DELETED_TABLE_SQL);
+      await sql.query(ARCHIVE_COLUMN_SQL);
     })().catch((err) => {
       schemaReady = null; // allow a retry on the next request
       throw err;

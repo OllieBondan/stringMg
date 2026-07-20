@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toDateInputValue } from "@/lib/format";
 import {
   COLORS,
@@ -176,8 +176,6 @@ export default function JobForm({ initial }: { initial?: Job }) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [justAdded, setJustAdded] = useState<{ id: string; customerName: string } | null>(null);
-  const customerNameRef = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof JobSpecs>(key: K) => (value: JobSpecs[K]) =>
     setSpecs((s) => ({ ...s, [key]: value }));
@@ -206,19 +204,8 @@ export default function JobForm({ initial }: { initial?: Job }) {
           });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
-      if (initial) {
-        router.push(`/jobs/${data.id}`);
-        router.refresh();
-        return;
-      }
-      // New job: stay put so another racket can be added right away, instead
-      // of forcing a trip through the detail page and back for every intake.
-      setJustAdded({ id: data.id, customerName: specs.customerName });
-      setSpecs(EMPTY);
-      setReceivedDate(toDateInputValue());
-      setSaving(false);
-      router.refresh(); // keeps the list current for when they do head back
-      customerNameRef.current?.focus();
+      router.push(`/jobs/${data.id}`);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
       setSaving(false);
@@ -236,20 +223,6 @@ export default function JobForm({ initial }: { initial?: Job }) {
           🏠 Main menu
         </Link>
       </div>
-
-      {justAdded && (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200">
-          <span>
-            ✓ Added <span className="font-semibold">{justAdded.customerName}</span>&apos;s racket.
-          </span>
-          <Link
-            href={`/jobs/${justAdded.id}`}
-            className="font-medium underline-offset-2 hover:underline"
-          >
-            View details
-          </Link>
-        </p>
-      )}
 
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -270,13 +243,9 @@ export default function JobForm({ initial }: { initial?: Job }) {
           Customer name
         </span>
         <input
-          ref={customerNameRef}
           type="text"
           value={specs.customerName}
-          onChange={(e) => {
-            setJustAdded(null);
-            set("customerName")(e.target.value);
-          }}
+          onChange={(e) => set("customerName")(e.target.value)}
           required
           placeholder="Who handed over the racket"
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"

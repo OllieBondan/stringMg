@@ -14,9 +14,11 @@ it and when:
 
 Records live in **Neon Postgres** (connected through Vercel's Storage tab).
 Deleted jobs are moved to a `deleted_jobs` table, never destroyed. The list is
-searchable, sortable, and groupable, and can be exported to a Google Sheet or
-downloaded as CSV. Sign-in is Google-only, restricted to an allowlist of
-emails.
+searchable, sortable, and groupable, supports bulk-advancing a filtered batch
+of same-status jobs in one tap, and can be exported to a Google Sheet or
+downloaded as CSV. Jobs completed over a month ago can be archived to a
+`/history` page to keep the active list short — archiving never deletes
+anything. Sign-in is Google-only, restricted to an allowlist of emails.
 
 **Stack:** Next.js 15 (App Router, TypeScript), Tailwind CSS 4, Auth.js v5
 (Google), Neon Postgres (`@neondatabase/serverless`), csv-stringify for
@@ -89,7 +91,14 @@ All access goes through [lib/repository.ts](lib/repository.ts); updates use
 optimistic locking (`WHERE updated_at = <as read>`) so concurrent changes can
 never silently overwrite each other. Every mutation updates
 `updated_at`/`updated_by`, and each workflow step keeps its own `*_at`/`*_by`
-audit pair. CSV lives on as the export format (download + Google Sheets).
+audit pair. CSV lives on as the export format (download + Google Sheets),
+and always includes both active and archived jobs (never `deleted_jobs`).
+
+Completed (`DONE`) jobs older than 30 days can be archived: an `archived_at`/
+`archived_by` pair is set on the same row (it never moves tables), which
+simply drops it out of the active list's `WHERE archived_at IS NULL` query.
+`/history` shows the rest with the same list UI. Nothing is ever deleted by
+archiving.
 
 ### Migrating from the old CSV storage (one-time)
 

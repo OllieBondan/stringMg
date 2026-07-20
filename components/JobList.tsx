@@ -1,39 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { formatDate, shortUser } from "@/lib/format";
-import { Job, JobStatus, STATUSES, statusRank } from "@/lib/types";
+import { Job, JobStatus, STATUSES, STEPS, statusRank } from "@/lib/types";
 import StatusBadge, { STATUS_LABELS } from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
 
+type JobWithArchive = Job & { archivedAt?: string };
 type SortKey = "newest" | "oldest" | "customer" | "status";
-type GroupKey = "none" | "status" | "brand" | "customer";
+type GroupKey = "none" | "status" | "brand" | "customer" | "month";
 
 const ALL = "";
 
-/** Job's business date: when the racket was received (falls back to creation). */
-const jobDate = (j: Job) => j.steps.received?.at ?? j.createdAt;
-
-const SORTERS: Record<SortKey, (a: Job, b: Job) => number> = {
-  newest: (a, b) => jobDate(b).localeCompare(jobDate(a)),
-  oldest: (a, b) => jobDate(a).localeCompare(jobDate(b)),
-  customer: (a, b) => a.customerName.localeCompare(b.customerName),
-  status: (a, b) => statusRank(a.status) - statusRank(b.status),
-};
-
-function groupLabel(job: Job, key: GroupKey): string {
-  if (key === "status") return STATUS_LABELS[job.status];
-  if (key === "brand") return job.racketBrand || "(no brand)";
-  if (key === "customer") return job.customerName;
-  return "";
+function monthLabel(iso: string): string {
+  if (!iso) return "Unknown";
+  return new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
 const selectClass =
   "rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
 
-export default function JobList({ jobs }: { jobs: Job[] }) {
+export default function JobList({
+  jobs,
+  variant = "active",
+  canConfirmTasya = false,
+  archivableCount = 0,
+}: {
+  jobs: JobWithArchive[];
+  variant?: "active" | "history";
+  canConfirmTasya?: boolean;
+  archivableCount?: number;
+}) {
   useFreshData();
+  const router = useRouter();
   const [nameQuery, setNameQuery] = useState("");
   const [racketTypeFilter, setRacketTypeFilter] = useState<string>(ALL);
   const [statusFilter, setStatusFilter] = useState<JobStatus | typeof ALL>(ALL);
@@ -41,6 +42,30 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
   const [group, setGroup] = useState<GroupKey>("none");
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
+
+  // The job's headline date: when it was received (active list) or when it
+  // left the active list (history) — falls back sensibly either way.
+  const dateOf = (j: JobWithArchive) =>
+    variant === "history" ? j.archivedAt || j.updatedAt : (j.steps.received?.at ?? j.createdAt);
+
+  const SORTERS = useMemo<Record<SortKey, (a: Job, b: Job) => number>>(
+    () => ({
+      newest: (a, b) => dateOf(b).localeCompare(dateOf(a)),
+      oldest: (a, b) => dateOf(a).localeCompare(dateOf(b)),
+      customer: (a, b) => a.customerName.localeCompare(b.customerName),
+      status: (a, b) => statusRank(a.status) - statusRank(b.status),
+    }),
+    [variant]
+  );
+
+  function groupLabel(job: JobWithArchive, key: GroupKey): string {
+    if (key === "status") return STATUS_LABELS[job.status];
+    if (key === "brand") return job.racketBrand || "(no brand)";
+    if (key === "customer") return job.customerName;
+    if (key === "month") return monthLabel(dateOf(job));
+    return "";
+  }
 
   const racketTypeOptions = useMemo(
     () =>
@@ -67,17 +92,93 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
       return true;
     });
     return [...filtered].sort(SORTERS[sort]);
-  }, [jobs, nameQuery, racketTypeFilter, statusFilter, sort]);
+  }, [jobs, nameQuery, racketTypeFilter, statusFilter, sort, SORTERS]);
 
   const groups = useMemo(() => {
-    if (group === "none") return [["", visible]] as [string, Job[]][];
-    const map = new Map<string, Job[]>();
+    if (group === "none") return [["", visible]] as [string, JobWithArchive[]][];
+    const map = new Map<string, JobWithArchive[]>();
     for (const job of visible) {
       const label = groupLabel(job, group);
       map.set(label, [...(map.get(label) ?? []), job]);
     }
     return [...map.entries()];
   }, [visible, group]);
+
+  // --- Bulk advance (active list only): every visible job already shares
+  // statusFilter once one is chosen, so selection needs no extra grouping.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+
+  const statusIndex = statusFilter ? STEPS.findIndex((s) => s.status === statusFilter) : -1;
+  const nextStepDef = statusIndex >= 0 && statusIndex < STEPS.length - 1 ? STEPS[statusIndex + 1] : null;
+  const selectAvailable = variant === "active" && nextStepDef !== null;
+  const bulkForbidden = nextStepDef?.key === "tasyaReceived" && !canConfirmTasya;
+
+  useEffect(() => {
+    setSelected(new Set());
+    if (!selectAvailable) setSelectMode(false);
+  }, [statusFilter, selectAvailable]);
+
+  function toggleSelect(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkAdvanceSelected() {
+    if (!nextStepDef || selected.size === 0 || bulkForbidden) return;
+    setBulkBusy(true);
+    setBulkMsg(null);
+    try {
+      const res = await fetch("/api/jobs/bulk-advance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selected], fromStatus: statusFilter }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Bulk update failed");
+      const results: { id: string; ok: boolean }[] = data.results;
+      const okCount = results.filter((r) => r.ok).length;
+      const failCount = results.length - okCount;
+      setBulkMsg(
+        failCount === 0
+          ? `Advanced ${okCount} job(s) to ${STATUS_LABELS[nextStepDef.status]}.`
+          : `Advanced ${okCount} job(s); ${failCount} skipped (changed in the meantime).`
+      );
+      setSelected(new Set());
+      setSelectMode(false);
+      router.refresh();
+    } catch (err) {
+      setBulkMsg(err instanceof Error ? err.message : "Bulk update failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function archiveOld() {
+    if (
+      !confirm(
+        `Archive ${archivableCount} job(s) completed over a month ago? They'll move to History — nothing is deleted.`
+      )
+    )
+      return;
+    setArchiving(true);
+    try {
+      const res = await fetch("/api/jobs/archive-old", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Archive failed");
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Archive failed");
+    } finally {
+      setArchiving(false);
+    }
+  }
 
   async function exportToSheet() {
     setExporting(true);
@@ -93,6 +194,31 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
     } finally {
       setExporting(false);
     }
+  }
+
+  function renderCardBody(job: JobWithArchive) {
+    return (
+      <>
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate font-semibold">{job.customerName}</span>
+          <StatusBadge status={job.status} />
+        </div>
+        <div className="mt-1 truncate text-sm text-slate-600 dark:text-slate-300">
+          {[job.racketBrand, job.racketType, job.racketColor].filter(Boolean).join(" · ")}
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <span className="truncate">
+            {job.stringType}
+            {job.tensionValue && ` @ ${job.tensionValue} ${job.tensionUnit}`}
+          </span>
+          <span className="whitespace-nowrap" suppressHydrationWarning>
+            {variant === "history"
+              ? `Archived ${formatDate(dateOf(job))}`
+              : `${formatDate(dateOf(job))} · ${shortUser(job.createdBy)}`}
+          </span>
+        </div>
+      </>
+    );
   }
 
   return (
@@ -140,6 +266,24 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
               Clear
             </button>
           )}
+          {variant === "active" && (
+            <button
+              onClick={() => setSelectMode((v) => !v)}
+              disabled={!selectAvailable}
+              title={
+                selectAvailable
+                  ? "Select jobs to advance them together"
+                  : "Filter by a status (not Done) to enable bulk actions"
+              }
+              className={`rounded-lg border px-2 py-2 text-sm font-medium disabled:opacity-40 ${
+                selectMode
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+              }`}
+            >
+              {selectMode ? "Cancel select" : "Select"}
+            </button>
+          )}
           <span className="ms-auto flex items-center gap-2">
             <select
               value={sort}
@@ -162,16 +306,68 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
               <option value="status">Group: status</option>
               <option value="brand">Group: brand</option>
               <option value="customer">Group: customer</option>
+              {variant === "history" && <option value="month">Group: month</option>}
             </select>
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-sm">
+      {selectMode && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800">
+          <span className="text-slate-600 dark:text-slate-300">
+            {selected.size} selected
+            {selected.size < visible.length && (
+              <button
+                onClick={() => setSelected(new Set(visible.map((j) => j.id)))}
+                className="ml-2 font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+              >
+                Select all {visible.length}
+              </button>
+            )}
+          </span>
+          <span className="flex-1" />
+          {bulkForbidden ? (
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Only Tasya can confirm this step
+            </span>
+          ) : (
+            <button
+              onClick={bulkAdvanceSelected}
+              disabled={selected.size === 0 || bulkBusy}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 font-medium text-white disabled:opacity-40"
+            >
+              {bulkBusy ? "Working…" : `${nextStepDef?.action} (${selected.size})`}
+            </button>
+          )}
+        </div>
+      )}
+      {bulkMsg && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200">
+          {bulkMsg}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="text-slate-500 dark:text-slate-400">
           {filtersActive ? `${visible.length} of ${jobs.length}` : visible.length} record(s)
         </span>
         <span className="flex-1" />
+        {variant === "active" && (
+          <Link
+            href="/history"
+            className="font-medium text-slate-600 underline-offset-2 hover:underline dark:text-slate-300"
+          >
+            🕘 History
+          </Link>
+        )}
+        {variant === "history" && (
+          <Link
+            href="/"
+            className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+          >
+            ← Active jobs
+          </Link>
+        )}
         <button
           onClick={exportToSheet}
           disabled={exporting}
@@ -192,9 +388,28 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
         </p>
       )}
 
+      {variant === "active" && archivableCount > 0 && (
+        <button
+          onClick={archiveOld}
+          disabled={archiving}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/50"
+        >
+          {archiving
+            ? "Archiving…"
+            : `📦 Archive ${archivableCount} completed job(s) older than 1 month`}
+        </button>
+      )}
+
       {jobs.length === 0 && (
         <p className="py-16 text-center text-slate-500 dark:text-slate-400">
-          No records yet — tap <span className="font-semibold">+</span> to add the first racket.
+          {variant === "history" ? (
+            "No archived jobs yet — completed jobs older than a month can be archived from the main list."
+          ) : (
+            <>
+              No records yet — tap <span className="font-semibold">+</span> to add the first
+              racket.
+            </>
+          )}
         </p>
       )}
       {jobs.length > 0 && visible.length === 0 && (
@@ -213,42 +428,52 @@ export default function JobList({ jobs }: { jobs: Job[] }) {
           <ul className="flex flex-col gap-2">
             {groupJobs.map((job) => (
               <li key={job.id}>
-                <Link
-                  href={`/jobs/${job.id}`}
-                  className="block rounded-xl border border-slate-200 bg-white p-3 shadow-sm active:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:active:bg-slate-700"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-semibold">{job.customerName}</span>
-                    <StatusBadge status={job.status} />
-                  </div>
-                  <div className="mt-1 truncate text-sm text-slate-600 dark:text-slate-300">
-                    {[job.racketBrand, job.racketType, job.racketColor]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="truncate">
-                      {job.stringType}
-                      {job.tensionValue && ` @ ${job.tensionValue} ${job.tensionUnit}`}
-                    </span>
-                    <span className="whitespace-nowrap" suppressHydrationWarning>
-                      {formatDate(jobDate(job))} · {shortUser(job.createdBy)}
-                    </span>
-                  </div>
-                </Link>
+                {selectMode ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleSelect(job.id)}
+                    className={`block w-full rounded-xl border p-3 text-left shadow-sm ${
+                      selected.has(job.id)
+                        ? "border-emerald-500 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-900/20"
+                        : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span
+                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
+                          selected.has(job.id)
+                            ? "border-emerald-600 bg-emerald-600 text-white"
+                            : "border-slate-300 dark:border-slate-500"
+                        }`}
+                      >
+                        {selected.has(job.id) ? "✓" : ""}
+                      </span>
+                      <div className="min-w-0 flex-1">{renderCardBody(job)}</div>
+                    </div>
+                  </button>
+                ) : (
+                  <Link
+                    href={`/jobs/${job.id}`}
+                    className="block rounded-xl border border-slate-200 bg-white p-3 shadow-sm active:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:active:bg-slate-700"
+                  >
+                    {renderCardBody(job)}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
         </section>
       ))}
 
-      <Link
-        href="/jobs/new"
-        aria-label="New job"
-        className="fixed bottom-6 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-3xl font-light text-white shadow-lg hover:bg-emerald-700 active:scale-95"
-      >
-        +
-      </Link>
+      {variant === "active" && (
+        <Link
+          href="/jobs/new"
+          aria-label="New job"
+          className="fixed bottom-6 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-3xl font-light text-white shadow-lg hover:bg-emerald-700 active:scale-95"
+        >
+          +
+        </Link>
+      )}
     </div>
   );
 }

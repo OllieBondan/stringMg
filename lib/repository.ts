@@ -112,8 +112,23 @@ async function updateJobRow(job: Job, guardUpdatedAt: string): Promise<boolean> 
 
 export async function listJobs(): Promise<Job[]> {
   await ensureSchema();
-  const rows = (await db().query("SELECT * FROM jobs ORDER BY created_at DESC")) as Row[];
+  const rows = (await db().query(
+    "SELECT * FROM jobs WHERE archived_at IS NULL ORDER BY created_at DESC"
+  )) as Row[];
   return rows.map(rowToJob);
+}
+
+export interface ArchivedJob extends Job {
+  archivedAt: string;
+}
+
+/** Completed jobs moved out of the active list (see archiveOldCompleted). */
+export async function listArchivedJobs(): Promise<ArchivedJob[]> {
+  await ensureSchema();
+  const rows = (await db().query(
+    "SELECT * FROM jobs WHERE archived_at IS NOT NULL ORDER BY archived_at DESC"
+  )) as Row[];
+  return rows.map((r) => ({ ...rowToJob(r), archivedAt: r.archived_at ?? "" }));
 }
 
 export async function getJob(id: string): Promise<Job> {
@@ -255,21 +270,87 @@ export async function undoLastStep(
   );
 }
 
-/** Moves the row into deleted_jobs and removes it from jobs, atomically. */
+/**
+ * Moves the row into deleted_jobs and removes it from jobs, atomically.
+ * Columns are named explicitly (not `moved.*`) because jobs has columns
+ * (archived_at/by) that deleted_jobs intentionally doesn't — once deleted,
+ * archive state is irrelevant, so it isn't carried over.
+ */
 export async function deleteJob(id: string, user: string): Promise<void> {
   await ensureSchema();
   const rows = (await db().query(
-    `WITH moved AS (DELETE FROM jobs WHERE id = $1 RETURNING *)
-     INSERT INTO deleted_jobs SELECT moved.*, $2, $3 FROM moved RETURNING id`,
+    `WITH moved AS (DELETE FROM jobs WHERE id = $1 RETURNING ${COLUMN_LIST})
+     INSERT INTO deleted_jobs (${COLUMN_LIST}, deleted_at, deleted_by)
+     SELECT ${COLUMN_LIST}, $2, $3 FROM moved RETURNING id`,
     [id, new Date().toISOString(), user]
   )) as Row[];
   if (rows.length === 0) throw new NotFoundError(`Job ${id} not found`);
 }
 
-/** The full record set as CSV (same schema as the historical file). */
+/** The full record set as CSV, active and archived alike (never deleted). */
 export async function rawCsv(): Promise<string> {
-  const jobs = await listJobs();
-  return stringify([[...CSV_HEADER], ...jobs.map(jobToRow)]);
+  await ensureSchema();
+  const rows = (await db().query("SELECT * FROM jobs ORDER BY created_at DESC")) as Row[];
+  return stringify([[...CSV_HEADER], ...rows.map(rowToJob).map(jobToRow)]);
+}
+
+/** Advances every listed job by one step, if it is still at fromStatus. */
+export interface BulkAdvanceResult {
+  id: string;
+  ok: boolean;
+  status?: JobStatus;
+  error?: string;
+}
+
+export async function bulkAdvance(
+  ids: string[],
+  fromStatus: JobStatus,
+  user: string
+): Promise<BulkAdvanceResult[]> {
+  const results: BulkAdvanceResult[] = [];
+  for (const id of ids) {
+    try {
+      const job = await getJob(id);
+      if (job.status !== fromStatus) {
+        results.push({ id, ok: false, error: "Status changed — skipped" });
+        continue;
+      }
+      const updated = await advanceStep(id, user);
+      results.push({ id, ok: true, status: updated.status });
+    } catch (err) {
+      results.push({ id, ok: false, error: err instanceof Error ? err.message : "Failed" });
+    }
+  }
+  return results;
+}
+
+/** Jobs eligible to leave the active list: DONE and completed over a month ago. */
+const ARCHIVE_AFTER_DAYS = 30;
+const archiveCutoffIso = () =>
+  new Date(Date.now() - ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+export async function countArchivable(): Promise<number> {
+  await ensureSchema();
+  const rows = (await db().query(
+    `SELECT count(*)::int AS n FROM jobs
+     WHERE status = 'DONE' AND step7_tasya_received_at IS NOT NULL
+       AND step7_tasya_received_at < $1 AND archived_at IS NULL`,
+    [archiveCutoffIso()]
+  )) as { n: number }[];
+  return rows[0]?.n ?? 0;
+}
+
+/** Moves every eligible job into history in one statement; returns how many. */
+export async function archiveOldCompleted(user: string): Promise<number> {
+  await ensureSchema();
+  const rows = (await db().query(
+    `UPDATE jobs SET archived_at = $1, archived_by = $2
+     WHERE status = 'DONE' AND step7_tasya_received_at IS NOT NULL
+       AND step7_tasya_received_at < $3 AND archived_at IS NULL
+     RETURNING id`,
+    [new Date().toISOString(), user, archiveCutoffIso()]
+  )) as Row[];
+  return rows.length;
 }
 
 /** Validation helper for the one-time CSV import (kept strict on purpose). */
