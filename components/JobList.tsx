@@ -42,6 +42,7 @@ export default function JobList({
   const [racketBrandFilter, setRacketBrandFilter] = useState<string>(ALL);
   const [racketTypeFilter, setRacketTypeFilter] = useState<string>(ALL);
   const [statusFilter, setStatusFilter] = useState<JobStatus | typeof ALL>(ALL);
+  const [notesOnly, setNotesOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("newest");
   const [group, setGroup] = useState<GroupKey>("none");
   const [exporting, setExporting] = useState(false);
@@ -94,13 +95,15 @@ export default function JobList({
     nameQuery.trim() !== "" ||
     racketBrandFilter !== ALL ||
     racketTypeFilter !== ALL ||
-    statusFilter !== ALL;
+    statusFilter !== ALL ||
+    notesOnly;
 
   function clearFilters() {
     setNameQuery("");
     setRacketBrandFilter(ALL);
     setRacketTypeFilter(ALL);
     setStatusFilter(ALL);
+    setNotesOnly(false);
   }
 
   const visible = useMemo(() => {
@@ -110,10 +113,11 @@ export default function JobList({
       if (racketBrandFilter !== ALL && j.racketBrand !== racketBrandFilter) return false;
       if (racketTypeFilter !== ALL && j.racketType !== racketTypeFilter) return false;
       if (statusFilter !== ALL && j.status !== statusFilter) return false;
+      if (notesOnly && !j.notes) return false;
       return true;
     });
     return [...filtered].sort(SORTERS[sort]);
-  }, [jobs, nameQuery, racketBrandFilter, racketTypeFilter, statusFilter, sort, SORTERS]);
+  }, [jobs, nameQuery, racketBrandFilter, racketTypeFilter, statusFilter, notesOnly, sort, SORTERS]);
 
   const groups = useMemo(() => {
     if (group === "none") return [["", visible]] as [string, JobWithArchive[]][];
@@ -321,6 +325,15 @@ export default function JobList({
               </option>
             ))}
           </select>
+          <label className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <input
+              type="checkbox"
+              checked={notesOnly}
+              onChange={(e) => setNotesOnly(e.target.checked)}
+              className="h-4 w-4 accent-emerald-600"
+            />
+            📝 Has notes
+          </label>
           {filtersActive && (
             <button
               onClick={clearFilters}
