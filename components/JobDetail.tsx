@@ -20,6 +20,7 @@ export default function JobDetail({
   const [job, setJob] = useState(initialJob);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   // Adopt server data from router.refresh() only when it is strictly NEWER —
   // a refresh served by a lagging replica must not roll the UI back to the
@@ -27,6 +28,19 @@ export default function JobDetail({
   useEffect(() => {
     setJob((current) => (initialJob.updatedAt > current.updatedAt ? initialJob : current));
   }, [initialJob]);
+
+  // Arriving via a link like /jobs/{id}#notes (e.g. the list's notes icon):
+  // scroll straight to that field and flash it briefly so it's unmistakable.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightId(id);
+    const t = setTimeout(() => setHighlightId(null), 2000);
+    return () => clearTimeout(t);
+  }, []);
 
   const next = nextStep(job);
   const last = lastCompletedStep(job);
@@ -66,9 +80,14 @@ export default function JobDetail({
     }
   }
 
-  const spec = (label: string, value: string) =>
+  const spec = (label: string, value: string, id?: string) =>
     value ? (
-      <div className="flex justify-between gap-3 py-1">
+      <div
+        id={id}
+        className={`flex scroll-mt-16 justify-between gap-3 rounded-md py-1 transition-colors duration-500 ${
+          id && highlightId === id ? "-mx-2 bg-amber-100 px-2 dark:bg-amber-900/30" : ""
+        }`}
+      >
         <span className="text-slate-500 dark:text-slate-400">{label}</span>
         <span className="text-right font-medium">{value}</span>
       </div>
@@ -102,7 +121,7 @@ export default function JobDetail({
         {spec("String", job.stringType)}
         {spec("String color", job.stringColor)}
         {spec("Tension", job.tensionValue && `${job.tensionValue} ${job.tensionUnit}`)}
-        {spec("Notes", job.notes)}
+        {spec("Notes", job.notes, "notes")}
         <div className="mt-2 border-t border-slate-100 pt-2 text-right dark:border-slate-700">
           <Link
             href={`/jobs/${job.id}/edit`}

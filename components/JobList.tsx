@@ -215,7 +215,30 @@ export default function JobList({
     return (
       <>
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate font-semibold">{job.customerName}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-semibold">{job.customerName}</span>
+            {job.notes && (
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label="This job has notes — view them"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  router.push(`/jobs/${job.id}#notes`);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  router.push(`/jobs/${job.id}#notes`);
+                }}
+                className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs leading-none text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+              >
+                📝
+              </span>
+            )}
+          </span>
           <StatusBadge status={job.status} />
         </div>
         <div className="mt-1 truncate text-sm text-slate-600 dark:text-slate-300">
