@@ -74,12 +74,20 @@ export default async function LoginPage({
         </form>
       )}
       {callbackUrl && (
-        <p className="max-w-sm px-4 text-xs text-slate-400 dark:text-slate-500">
-          If Google shows <span className="font-mono">redirect_uri_mismatch</span>, add this exact
-          URL to the OAuth client&apos;s authorized redirect URIs:
-          <br />
-          <span className="select-all break-all font-mono">{callbackUrl}</span>
-        </p>
+        <details className="max-w-sm text-slate-400 dark:text-slate-500">
+          <summary className="cursor-pointer select-none text-xs underline-offset-2 hover:text-slate-600 hover:underline dark:hover:text-slate-300">
+            Trouble signing in?
+          </summary>
+          <div className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-left text-xs dark:bg-slate-800">
+            <p>
+              If Google shows <span className="font-mono">redirect_uri_mismatch</span>, add this
+              exact URL to the OAuth client&apos;s authorized redirect URIs:
+            </p>
+            <p className="mt-1.5 select-all break-all rounded bg-white px-2 py-1 font-mono dark:bg-slate-900">
+              {callbackUrl}
+            </p>
+          </div>
+        </details>
       )}
     </div>
   );

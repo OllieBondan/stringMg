@@ -36,6 +36,7 @@ export default function JobList({
   useFreshData();
   const router = useRouter();
   const [nameQuery, setNameQuery] = useState("");
+  const [racketBrandFilter, setRacketBrandFilter] = useState<string>(ALL);
   const [racketTypeFilter, setRacketTypeFilter] = useState<string>(ALL);
   const [statusFilter, setStatusFilter] = useState<JobStatus | typeof ALL>(ALL);
   const [sort, setSort] = useState<SortKey>("newest");
@@ -67,6 +68,14 @@ export default function JobList({
     return "";
   }
 
+  const racketBrandOptions = useMemo(
+    () =>
+      [...new Set(jobs.map((j) => j.racketBrand).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b)
+      ),
+    [jobs]
+  );
+
   const racketTypeOptions = useMemo(
     () =>
       [...new Set(jobs.map((j) => j.racketType).filter(Boolean))].sort((a, b) =>
@@ -75,10 +84,15 @@ export default function JobList({
     [jobs]
   );
 
-  const filtersActive = nameQuery.trim() !== "" || racketTypeFilter !== ALL || statusFilter !== ALL;
+  const filtersActive =
+    nameQuery.trim() !== "" ||
+    racketBrandFilter !== ALL ||
+    racketTypeFilter !== ALL ||
+    statusFilter !== ALL;
 
   function clearFilters() {
     setNameQuery("");
+    setRacketBrandFilter(ALL);
     setRacketTypeFilter(ALL);
     setStatusFilter(ALL);
   }
@@ -87,12 +101,13 @@ export default function JobList({
     const q = nameQuery.trim().toLowerCase();
     const filtered = jobs.filter((j) => {
       if (q && !j.customerName.toLowerCase().includes(q)) return false;
+      if (racketBrandFilter !== ALL && j.racketBrand !== racketBrandFilter) return false;
       if (racketTypeFilter !== ALL && j.racketType !== racketTypeFilter) return false;
       if (statusFilter !== ALL && j.status !== statusFilter) return false;
       return true;
     });
     return [...filtered].sort(SORTERS[sort]);
-  }, [jobs, nameQuery, racketTypeFilter, statusFilter, sort, SORTERS]);
+  }, [jobs, nameQuery, racketBrandFilter, racketTypeFilter, statusFilter, sort, SORTERS]);
 
   const groups = useMemo(() => {
     if (group === "none") return [["", visible]] as [string, JobWithArchive[]][];
@@ -232,6 +247,19 @@ export default function JobList({
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
         />
         <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={racketBrandFilter}
+            onChange={(e) => setRacketBrandFilter(e.target.value)}
+            className={selectClass}
+            aria-label="Filter by racket brand"
+          >
+            <option value={ALL}>All brands</option>
+            {racketBrandOptions.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
           <select
             value={racketTypeFilter}
             onChange={(e) => setRacketTypeFilter(e.target.value)}

@@ -65,7 +65,8 @@ export default function AboutPage() {
       </div>
 
       <p className="max-w-sm text-xs text-slate-400 dark:text-slate-500">
-        Records are kept in Neon Postgres, exportable as CSV or to Google Sheets.
+        Records live in Neon Postgres, with one-tap export to a CSV download or a Google Sheet.
+        <br />
         Built with Next.js — developed with Claude Code.
       </p>
 
