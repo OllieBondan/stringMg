@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatDateTime, shortUser } from "@/lib/format";
+import { readJobOrder } from "@/lib/jobOrder";
 import { Job, STEPS, lastCompletedStep, nextStep } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
@@ -21,6 +22,11 @@ export default function JobDetail({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [nav, setNav] = useState<{
+    prevId: string | null;
+    nextId: string | null;
+    position: string | null;
+  }>({ prevId: null, nextId: null, position: null });
 
   // Adopt server data from router.refresh() only when it is strictly NEWER —
   // a refresh served by a lagging replica must not roll the UI back to the
@@ -28,6 +34,23 @@ export default function JobDetail({
   useEffect(() => {
     setJob((current) => (initialJob.updatedAt > current.updatedAt ? initialJob : current));
   }, [initialJob]);
+
+  // Previous/Next through whichever list (active or history) was last
+  // browsed in this tab — see lib/jobOrder.ts. Absent or stale order (direct
+  // link, private browsing, filters changed since) just hides the row.
+  useEffect(() => {
+    const ids = readJobOrder();
+    const idx = ids?.indexOf(initialJob.id) ?? -1;
+    if (!ids || idx === -1) {
+      setNav({ prevId: null, nextId: null, position: null });
+      return;
+    }
+    setNav({
+      prevId: idx > 0 ? ids[idx - 1] : null,
+      nextId: idx < ids.length - 1 ? ids[idx + 1] : null,
+      position: `${idx + 1} of ${ids.length}`,
+    });
+  }, [initialJob.id]);
 
   // Arriving via a link like /jobs/{id}#notes (e.g. the list's notes icon):
   // scroll straight to that field and flash it briefly so it's unmistakable.
@@ -93,8 +116,41 @@ export default function JobDetail({
       </div>
     ) : null;
 
+  const navButtonClass = (enabled: boolean) =>
+    `flex-1 rounded-lg border px-3 py-2 text-center text-sm font-medium ${
+      enabled
+        ? "border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50"
+        : "pointer-events-none border-slate-200 text-slate-300 dark:border-slate-700 dark:text-slate-600"
+    }`;
+
   return (
     <div className="flex flex-col gap-4">
+      {(nav.prevId || nav.nextId) && (
+        <div className="flex items-center gap-2">
+          <Link
+            href={nav.prevId ? `/jobs/${nav.prevId}` : "#"}
+            aria-disabled={!nav.prevId}
+            tabIndex={nav.prevId ? undefined : -1}
+            className={navButtonClass(!!nav.prevId)}
+          >
+            ← Previous
+          </Link>
+          {nav.position && (
+            <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">
+              {nav.position}
+            </span>
+          )}
+          <Link
+            href={nav.nextId ? `/jobs/${nav.nextId}` : "#"}
+            aria-disabled={!nav.nextId}
+            tabIndex={nav.nextId ? undefined : -1}
+            className={navButtonClass(!!nav.nextId)}
+          >
+            Next →
+          </Link>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <Link
           href="/jobs/new"

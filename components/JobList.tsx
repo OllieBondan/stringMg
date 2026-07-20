@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { formatDate, shortUser } from "@/lib/format";
+import { saveJobOrder } from "@/lib/jobOrder";
 import { Job, JobStatus, STATUSES, STEPS, statusRank } from "@/lib/types";
 import StatusBadge, { STATUS_LABELS } from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
@@ -21,6 +22,8 @@ function monthLabel(iso: string): string {
 
 const selectClass =
   "rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
+
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 export default function JobList({
   jobs,
@@ -119,6 +122,12 @@ export default function JobList({
     return [...map.entries()];
   }, [visible, group]);
 
+  // Remember the exact on-screen order (post filter/sort/group) so the
+  // detail page can offer Previous/Next through what's actually visible here.
+  useEffect(() => {
+    saveJobOrder(groups.flatMap(([, js]) => js.map((j) => j.id)));
+  }, [groups]);
+
   // --- Bulk advance (active list only): every visible job already shares
   // statusFilter once one is chosen, so selection needs no extra grouping.
   const [selectMode, setSelectMode] = useState(false);
@@ -162,8 +171,8 @@ export default function JobList({
       const failCount = results.length - okCount;
       setBulkMsg(
         failCount === 0
-          ? `Advanced ${okCount} job(s) to ${STATUS_LABELS[nextStepDef.status]}.`
-          : `Advanced ${okCount} job(s); ${failCount} skipped (changed in the meantime).`
+          ? `Advanced ${plural(okCount, "job")} to ${STATUS_LABELS[nextStepDef.status]}.`
+          : `Advanced ${plural(okCount, "job")}; ${plural(failCount, "job")} skipped (changed in the meantime).`
       );
       setSelected(new Set());
       setSelectMode(false);
@@ -178,7 +187,7 @@ export default function JobList({
   async function archiveOld() {
     if (
       !confirm(
-        `Archive ${archivableCount} job(s) completed over a month ago? They'll move to History — nothing is deleted.`
+        `Archive ${plural(archivableCount, "job")} completed over a month ago? They'll move to History — nothing is deleted.`
       )
     )
       return;
@@ -276,7 +285,7 @@ export default function JobList({
             className={selectClass}
             aria-label="Filter by racket brand"
           >
-            <option value={ALL}>All brands</option>
+            <option value={ALL}>All racket brands</option>
             {racketBrandOptions.map((b) => (
               <option key={b} value={b}>
                 {b}
@@ -314,7 +323,7 @@ export default function JobList({
               onClick={clearFilters}
               className="text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
             >
-              Clear
+              Clear filters
             </button>
           )}
           {variant === "active" && (
@@ -400,7 +409,9 @@ export default function JobList({
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="text-slate-500 dark:text-slate-400">
-          {filtersActive ? `${visible.length} of ${jobs.length}` : visible.length} record(s)
+          {filtersActive
+            ? `${visible.length} of ${plural(jobs.length, "record")}`
+            : plural(visible.length, "record")}
         </span>
         <span className="flex-1" />
         {variant === "active" && (
@@ -430,7 +441,7 @@ export default function JobList({
           href="/api/download"
           className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
         >
-          CSV
+          Download CSV
         </a>
       </div>
       {exportMsg && (
@@ -447,7 +458,7 @@ export default function JobList({
         >
           {archiving
             ? "Archiving…"
-            : `📦 Archive ${archivableCount} completed job(s) older than 1 month`}
+            : `📦 Archive ${plural(archivableCount, "completed job")} older than 1 month`}
         </button>
       )}
 
