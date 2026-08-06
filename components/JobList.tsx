@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { formatDate, shortUser } from "@/lib/format";
+import { formatDate, formatDateTime, shortUser } from "@/lib/format";
 import { saveJobOrder } from "@/lib/jobOrder";
 import { Job, JobStatus, STATUSES, STEPS, statusRank } from "@/lib/types";
 import StatusBadge, { STATUS_LABELS } from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
 
 type JobWithArchive = Job & { archivedAt?: string };
-type SortKey = "newest" | "oldest" | "customer" | "status";
+type SortKey = "newest" | "oldest" | "updated" | "customer" | "status";
 type GroupKey = "none" | "status" | "brand" | "customer" | "month";
 
 const ALL = "";
@@ -59,6 +59,7 @@ export default function JobList({
     () => ({
       newest: (a, b) => dateOf(b).localeCompare(dateOf(a)),
       oldest: (a, b) => dateOf(a).localeCompare(dateOf(b)),
+      updated: (a, b) => b.updatedAt.localeCompare(a.updatedAt),
       customer: (a, b) => a.customerName.localeCompare(b.customerName),
       status: (a, b) => statusRank(a.status) - statusRank(b.status),
     }),
@@ -309,6 +310,9 @@ export default function JobList({
               : `${formatDate(dateOf(job))} · ${shortUser(job.createdBy)}`}
           </span>
         </div>
+        <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500" suppressHydrationWarning>
+          Updated {formatDateTime(job.updatedAt)}
+        </div>
       </>
     );
   }
@@ -398,6 +402,7 @@ export default function JobList({
             >
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
+              <option value="updated">Last updated</option>
               <option value="customer">By customer</option>
               <option value="status">By status</option>
             </select>
