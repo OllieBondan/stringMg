@@ -99,10 +99,3 @@ Completed (`DONE`) jobs older than 30 days can be archived: an `archived_at`/
 simply drops it out of the active list's `WHERE archived_at IS NULL` query.
 `/history` shows the rest with the same list UI. Nothing is ever deleted by
 archiving.
-
-### Migrating from the old CSV storage (one-time)
-
-If upgrading from v1.x (CSV in Vercel Blob): keep `BLOB_READ_WRITE_TOKEN` set,
-deploy v2, then open `/api/admin/import-csv?run=1` in the browser while signed
-in. It copies all records into Postgres (idempotent — safe to repeat) and
-leaves the Blob file untouched as a backup.

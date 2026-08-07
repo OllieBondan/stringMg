@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { MalformedCsvError } from "./csvRepository";
 import { ConflictError, ForbiddenError, NotFoundError } from "./repository";
 import { SessionUser, getSessionUser } from "./session";
 
@@ -23,9 +22,6 @@ export function toErrorResponse(err: unknown): NextResponse {
   }
   if (err instanceof ConflictError) {
     return NextResponse.json({ error: err.message }, { status: 409 });
-  }
-  if (err instanceof MalformedCsvError) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
   }
   console.error(err);
   const message = err instanceof Error ? err.message : "Unexpected error";

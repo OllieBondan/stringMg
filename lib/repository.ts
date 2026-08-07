@@ -1,5 +1,4 @@
 import { stringify } from "csv-stringify/sync";
-import { CSV_HEADER, jobToRow } from "./csvRepository";
 import { db, ensureSchema } from "./db";
 import { isTasya } from "./permissions";
 import {
@@ -7,7 +6,6 @@ import {
   JobSpecs,
   JobSpecsInput,
   JobStatus,
-  STATUSES,
   STEPS,
   TENSION_UNITS,
   TensionUnit,
@@ -18,8 +16,8 @@ import {
 
 /**
  * Postgres (Neon) data layer — one row per stringing job, columns mirroring
- * the historical CSV schema (see CSV_HEADER). All timestamps are ISO text.
- * Concurrency: optimistic locking — updates are guarded by
+ * the historical CSV export schema (see CSV_HEADER). All timestamps are ISO
+ * text. Concurrency: optimistic locking — updates are guarded by
  * `WHERE updated_at = <as read>`, so a lost update is impossible.
  */
 
@@ -27,7 +25,50 @@ export class NotFoundError extends Error {}
 export class ConflictError extends Error {}
 export class ForbiddenError extends Error {}
 
-export { CSV_HEADER };
+/** Column order for the CSV/Sheets export; mirrors the DB columns 1:1. */
+export const CSV_HEADER = [
+  "id",
+  "created_at",
+  "created_by",
+  "customer_name",
+  "racket_brand",
+  "racket_type",
+  "racket_color",
+  "string_type",
+  "string_color",
+  "tension_value",
+  "tension_unit",
+  "status",
+  ...STEPS.flatMap((s) => [`${s.column}_at`, `${s.column}_by`]),
+  "notes",
+  "updated_at",
+  "updated_by",
+] as const;
+
+function jobToRow(job: Job): string[] {
+  const stepCols = STEPS.flatMap((s) => {
+    const stamp = job.steps[s.key];
+    return [stamp?.at ?? "", stamp?.by ?? ""];
+  });
+  return [
+    job.id,
+    job.createdAt,
+    job.createdBy,
+    job.customerName,
+    job.racketBrand,
+    job.racketType,
+    job.racketColor,
+    job.stringType,
+    job.stringColor,
+    job.tensionValue,
+    job.tensionUnit,
+    job.status,
+    ...stepCols,
+    job.notes,
+    job.updatedAt,
+    job.updatedBy,
+  ];
+}
 
 type Row = Record<string, string | null>;
 
@@ -351,10 +392,4 @@ export async function archiveOldCompleted(user: string): Promise<number> {
     [new Date().toISOString(), user, archiveCutoffIso()]
   )) as Row[];
   return rows.length;
-}
-
-/** Validation helper for the one-time CSV import (kept strict on purpose). */
-export function assertImportableJob(job: Job): void {
-  if (!job.id) throw new Error("Job without id");
-  if (!STATUSES.includes(job.status)) throw new Error(`Invalid status ${job.status}`);
 }

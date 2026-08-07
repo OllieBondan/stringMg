@@ -2,8 +2,8 @@ export const TENSION_UNITS = ["Kg", "Lbs"] as const;
 export type TensionUnit = (typeof TENSION_UNITS)[number];
 
 /**
- * The fixed 6-step workflow of a stringing job, in order.
- * `column` is the CSV column prefix (`<column>_at` / `<column>_by`).
+ * The fixed 7-step workflow of a stringing job, in order.
+ * `column` is the CSV export column prefix (`<column>_at` / `<column>_by`).
  */
 export const STEPS = [
   {

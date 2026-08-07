@@ -51,13 +51,10 @@ EXPORT format (download + Google Sheets), not the storage.
 - Every mutation stamps `updated_at`/`updated_by`; each workflow step stores
   its own `*_at`/`*_by` audit pair. Step order is defined once in `STEPS`
   (`lib/types.ts`) — derive everything (status, next action, columns) from it
-- Column set/order is defined once as `CSV_HEADER` (in `lib/csvRepository.ts`,
-  re-exported by the repository) and mirrors the DB columns — schema changes
-  must update `STEPS`/`CSV_HEADER`, the `lib/db.ts` CREATE TABLEs, and
+- Column set/order is defined once as `CSV_HEADER` (in `lib/repository.ts`,
+  used only for the CSV/Sheets export) and mirrors the DB columns — schema
+  changes must update `STEPS`/`CSV_HEADER`, the `lib/db.ts` CREATE TABLEs, and
   `data/records.sample.csv` together
-- `lib/csvRepository.ts` + `lib/blobStore.ts` are LEGACY, kept only for the
-  one-time `/api/admin/import-csv?run=1` migration route (and its tests).
-  Remove all three together once the import is confirmed done in production.
 
 ## Project Structure
 
@@ -68,11 +65,10 @@ app/                 Pages (App Router) + API route handlers
   api/jobs/archive-old/   Move DONE jobs completed >30 days ago into history
   api/export/        Creates a Google Sheet via the user's OAuth token
   api/download/      CSV download (generated from the DB, active + archived)
-  api/admin/import-csv/  One-time legacy Blob CSV → Postgres import
   history/           Archived-jobs page (JobList in "history" variant)
 components/          Client components (JobList, JobForm, JobDetail, StatusBadge)
 lib/                 types.ts, options.ts, db.ts, repository.ts, permissions.ts,
-                     auth.ts, session.ts, api.ts, format.ts (+ legacy csvRepository/blobStore)
+                     auth.ts, session.ts, api.ts, format.ts
 data/
   records.sample.csv Reference/sample of the export schema
 ```
@@ -104,11 +100,10 @@ npm run typecheck  # tsc --noEmit
 
 ## Testing
 
-- Pure logic (steps/status/validation) is unit-tested; the SQL layer is
-  verified by driving the dev server end-to-end against the real Neon DB
-  (create → advance → conflict → delete), cleaning up test records after
-- Legacy CSV tests (`lib/csvRepository.test.ts`) stay green until the legacy
-  import path is removed
+- Pure logic (steps/status in `lib/types.test.ts`, the Tasya permission gate
+  in `lib/permissions.test.ts`) is unit-tested; the SQL layer is verified by
+  driving the dev server end-to-end against the real Neon DB (create →
+  advance → conflict → delete), cleaning up test records after
 
 ## Code Style
 
