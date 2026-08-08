@@ -21,17 +21,19 @@ function SelectWithOther({
   value,
   onChange,
   required,
+  disabled,
 }: {
   label: string;
   options: readonly string[];
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
+  disabled?: boolean;
 }) {
   const isPreset = value === "" || options.includes(value);
   const [other, setOther] = useState(!isPreset);
   const inputClass =
-    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500";
+    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500";
 
   // No preset list (e.g. type/series of a custom brand): plain text input,
   // no pointless empty dropdown in between.
@@ -45,6 +47,7 @@ function SelectWithOther({
           type="text"
           value={value}
           required={required}
+          disabled={disabled}
           placeholder={`Type the ${label.toLowerCase()}`}
           onChange={(e) => onChange(e.target.value)}
           className={inputClass}
@@ -62,6 +65,7 @@ function SelectWithOther({
       <select
         value={selectValue}
         required={required && !other}
+        disabled={disabled}
         onChange={(e) => {
           if (e.target.value === OTHER) {
             setOther(true);
@@ -88,6 +92,7 @@ function SelectWithOther({
           type="text"
           value={value}
           required={required}
+          disabled={disabled}
           autoFocus
           placeholder={`Type the ${label.toLowerCase()}`}
           onChange={(e) => onChange(e.target.value)}
@@ -104,15 +109,17 @@ function ChipRadio({
   options,
   value,
   onChange,
+  disabled,
 }: {
   label: string;
   name: string;
   options: readonly string[];
   value: string;
   onChange: (v: string) => void;
+  disabled?: boolean;
 }) {
   return (
-    <fieldset>
+    <fieldset disabled={disabled}>
       <legend className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
         {label}
       </legend>
@@ -120,7 +127,11 @@ function ChipRadio({
         {options.map((o) => (
           <label
             key={o}
-            className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm shadow-sm transition-colors ${
+            className={`rounded-full border px-3 py-1.5 text-sm shadow-sm transition-colors ${
+              disabled
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer"
+            } ${
               value === o
                 ? "border-emerald-600 bg-emerald-600 text-white"
                 : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-500"
@@ -131,6 +142,7 @@ function ChipRadio({
               name={name}
               value={o}
               checked={value === o}
+              disabled={disabled}
               onChange={() => onChange(o)}
               className="sr-only"
             />
@@ -147,6 +159,7 @@ const EMPTY: JobSpecs = {
   racketBrand: "Yonex",
   racketType: "Astrox",
   racketColor: "Black",
+  ownString: false,
   stringType: "Yonex BG65",
   stringColor: "White",
   tensionValue: "10.5",
@@ -163,6 +176,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
           racketBrand: initial.racketBrand,
           racketType: initial.racketType,
           racketColor: initial.racketColor,
+          ownString: initial.ownString,
           stringType: initial.stringType,
           stringColor: initial.stringColor,
           tensionValue: initial.tensionValue,
@@ -310,12 +324,30 @@ export default function JobForm({ initial }: { initial?: Job }) {
           String
         </h2>
         <div className="flex flex-col gap-3">
+          <label className="flex w-fit items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              checked={specs.ownString}
+              onChange={(e) => {
+                const ownString = e.target.checked;
+                setSpecs((s) => ({
+                  ...s,
+                  ownString,
+                  stringType: ownString ? "" : s.stringType,
+                  stringColor: ownString ? "" : s.stringColor,
+                }));
+              }}
+              className="h-4 w-4 accent-emerald-600"
+            />
+            Customer brought their own string
+          </label>
           <SelectWithOther
             label="String type"
             options={STRING_TYPES}
             value={specs.stringType}
             onChange={set("stringType")}
-            required
+            required={!specs.ownString}
+            disabled={specs.ownString}
           />
           <ChipRadio
             label="String color"
@@ -323,6 +355,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
             options={COLORS}
             value={specs.stringColor}
             onChange={set("stringColor")}
+            disabled={specs.ownString}
           />
           <div className="flex items-end gap-3">
             <label className="block flex-1">

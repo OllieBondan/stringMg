@@ -99,6 +99,7 @@ export interface Job {
   racketBrand: string;
   racketType: string;
   racketColor: string;
+  ownString: boolean; // customer supplied their own string — stringType/Color are then blank
   stringType: string;
   stringColor: string;
   tensionValue: string; // kept as string end-to-end; validated numeric on input
@@ -122,6 +123,7 @@ export interface JobSpecs {
   racketBrand: string;
   racketType: string;
   racketColor: string;
+  ownString: boolean;
   stringType: string;
   stringColor: string;
   tensionValue: string;

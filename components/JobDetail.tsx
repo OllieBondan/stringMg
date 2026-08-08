@@ -175,8 +175,14 @@ export default function JobDetail({
       <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
         {spec("Racket", [job.racketBrand, job.racketType].filter(Boolean).join(" "))}
         {spec("Racket color", job.racketColor)}
-        {spec("String", job.stringType)}
-        {spec("String color", job.stringColor)}
+        {job.ownString ? (
+          spec("String", "Customer's own string")
+        ) : (
+          <>
+            {spec("String", job.stringType)}
+            {spec("String color", job.stringColor)}
+          </>
+        )}
         {spec("Tension", job.tensionValue && `${job.tensionValue} ${job.tensionUnit}`)}
         {spec("Notes", job.notes, "notes")}
         <div className="mt-2 border-t border-slate-100 pt-2 text-right dark:border-slate-700">

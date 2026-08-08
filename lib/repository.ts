@@ -36,6 +36,7 @@ export const CSV_HEADER = [
   "racket_brand",
   "racket_type",
   "racket_color",
+  "own_string",
   "string_type",
   "string_color",
   "tension_value",
@@ -60,6 +61,7 @@ function jobToRow(job: Job): string[] {
     job.racketBrand,
     job.racketType,
     job.racketColor,
+    job.ownString ? "true" : "false",
     job.stringType,
     job.stringColor,
     job.tensionValue,
@@ -72,37 +74,38 @@ function jobToRow(job: Job): string[] {
   ];
 }
 
-type Row = Record<string, string | null>;
+type Row = Record<string, string | boolean | null>;
 
 function rowToJob(row: Row): Job {
   const steps: Job["steps"] = {};
   for (const step of STEPS) {
     const at = row[`${step.column}_at`];
     const by = row[`${step.column}_by`];
-    if (at && by) steps[step.key] = { at, by };
+    if (at && by) steps[step.key] = { at: at as string, by: by as string };
   }
   return {
-    id: row.id ?? "",
-    createdAt: row.created_at ?? "",
-    createdBy: row.created_by ?? "",
-    customerName: row.customer_name ?? "",
-    racketBrand: row.racket_brand ?? "",
-    racketType: row.racket_type ?? "",
-    racketColor: row.racket_color ?? "",
-    stringType: row.string_type ?? "",
-    stringColor: row.string_color ?? "",
-    tensionValue: row.tension_value ?? "",
-    tensionUnit: (row.tension_unit ?? "Kg") as TensionUnit,
-    status: (row.status ?? "RECEIVED") as JobStatus,
+    id: (row.id as string) ?? "",
+    createdAt: (row.created_at as string) ?? "",
+    createdBy: (row.created_by as string) ?? "",
+    customerName: (row.customer_name as string) ?? "",
+    racketBrand: (row.racket_brand as string) ?? "",
+    racketType: (row.racket_type as string) ?? "",
+    racketColor: (row.racket_color as string) ?? "",
+    ownString: row.own_string === true || row.own_string === "true",
+    stringType: (row.string_type as string) ?? "",
+    stringColor: (row.string_color as string) ?? "",
+    tensionValue: (row.tension_value as string) ?? "",
+    tensionUnit: ((row.tension_unit as string) ?? "Kg") as TensionUnit,
+    status: ((row.status as string) ?? "RECEIVED") as JobStatus,
     steps,
-    notes: row.notes ?? "",
-    updatedAt: row.updated_at ?? "",
-    updatedBy: row.updated_by ?? "",
+    notes: (row.notes as string) ?? "",
+    updatedAt: (row.updated_at as string) ?? "",
+    updatedBy: (row.updated_by as string) ?? "",
   };
 }
 
 /** Column values in CSV_HEADER order — used by INSERT (which lists columns explicitly). */
-function jobValues(job: Job): (string | null)[] {
+function jobValues(job: Job): (string | boolean | null)[] {
   const stepValues = STEPS.flatMap((s) => {
     const stamp = job.steps[s.key];
     return [stamp?.at ?? null, stamp?.by ?? null];
@@ -115,6 +118,7 @@ function jobValues(job: Job): (string | null)[] {
     job.racketBrand,
     job.racketType,
     job.racketColor,
+    job.ownString,
     job.stringType,
     job.stringColor,
     job.tensionValue,
@@ -171,7 +175,7 @@ export async function listArchivedJobs(): Promise<ArchivedJob[]> {
   const rows = (await db().query(
     "SELECT * FROM jobs WHERE archived_at IS NOT NULL ORDER BY archived_at DESC"
   )) as Row[];
-  return rows.map((r) => ({ ...rowToJob(r), archivedAt: r.archived_at ?? "" }));
+  return rows.map((r) => ({ ...rowToJob(r), archivedAt: (r.archived_at as string) ?? "" }));
 }
 
 export async function getJob(id: string): Promise<Job> {
@@ -189,6 +193,12 @@ function validateSpecs(specs: JobSpecs): void {
   }
 }
 
+/** Customer's own string has no shop type/color to record — enforced server-side, not just disabled in the UI. */
+function normalizeSpecs(specs: JobSpecs): JobSpecs {
+  if (!specs.ownString) return specs;
+  return { ...specs, stringType: "", stringColor: "" };
+}
+
 /**
  * ISO stamp for the "received" step. A backfilled calendar day is stored as
  * noon UTC so it renders as that same date in any timezone; the current day
@@ -202,8 +212,9 @@ function receivedStamp(receivedDate: string | undefined, fallbackIso: string): s
 }
 
 export async function createJob(input: JobSpecsInput, user: string): Promise<Job> {
-  const { receivedDate, ...specs } = input;
-  validateSpecs(specs);
+  const { receivedDate, ...rawSpecs } = input;
+  validateSpecs(rawSpecs);
+  const specs = normalizeSpecs(rawSpecs);
   const now = new Date().toISOString();
   const job: Job = {
     id: crypto.randomUUID(),
@@ -251,8 +262,9 @@ export async function updateSpecs(
   user: string,
   expectedUpdatedAt?: string
 ): Promise<Job> {
-  const { receivedDate, ...specs } = input;
-  validateSpecs(specs);
+  const { receivedDate, ...rawSpecs } = input;
+  validateSpecs(rawSpecs);
+  const specs = normalizeSpecs(rawSpecs);
   return mutateJob(
     id,
     expectedUpdatedAt,
@@ -444,9 +456,9 @@ export async function subscriptionsForEmails(emails: string[]): Promise<PushSubs
     [emails.map((e) => e.toLowerCase())]
   )) as Row[];
   return rows.map((r) => ({
-    endpoint: r.endpoint ?? "",
-    email: r.email ?? "",
-    p256dh: r.p256dh ?? "",
-    auth: r.auth ?? "",
+    endpoint: (r.endpoint as string) ?? "",
+    email: (r.email as string) ?? "",
+    p256dh: (r.p256dh as string) ?? "",
+    auth: (r.auth as string) ?? "",
   }));
 }

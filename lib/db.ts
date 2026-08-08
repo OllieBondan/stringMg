@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   racket_brand text NOT NULL DEFAULT '',
   racket_type text NOT NULL DEFAULT '',
   racket_color text NOT NULL DEFAULT '',
+  own_string boolean NOT NULL DEFAULT false,
   string_type text NOT NULL DEFAULT '',
   string_color text NOT NULL DEFAULT '',
   tension_value text NOT NULL DEFAULT '',
@@ -61,6 +62,17 @@ ALTER TABLE jobs
   ADD COLUMN IF NOT EXISTS archived_at text,
   ADD COLUMN IF NOT EXISTS archived_by text`;
 
+// own_string: customer supplied their own string, so string_type/color are
+// blank — added after the initial release, so existing rows in both tables
+// need the column backfilled (default false: prior jobs used shop string).
+const OWN_STRING_COLUMN_SQL = `
+ALTER TABLE jobs
+  ADD COLUMN IF NOT EXISTS own_string boolean NOT NULL DEFAULT false`;
+const OWN_STRING_COLUMN_DELETED_SQL = OWN_STRING_COLUMN_SQL.replace(
+  "ALTER TABLE jobs",
+  "ALTER TABLE deleted_jobs"
+);
+
 // One row per browser/device push subscription. A user can hold several
 // (phone + desktop, or re-subscribing after clearing site data leaves the
 // old endpoint stale until a failed send prunes it — see lib/push.ts).
@@ -83,6 +95,8 @@ export function ensureSchema(): Promise<void> {
       await sql.query(JOBS_TABLE_SQL);
       await sql.query(DELETED_TABLE_SQL);
       await sql.query(ARCHIVE_COLUMN_SQL);
+      await sql.query(OWN_STRING_COLUMN_SQL);
+      await sql.query(OWN_STRING_COLUMN_DELETED_SQL);
       await sql.query(PUSH_SUBSCRIPTIONS_TABLE_SQL);
     })().catch((err) => {
       schemaReady = null; // allow a retry on the next request

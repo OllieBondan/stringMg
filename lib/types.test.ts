@@ -22,6 +22,7 @@ function jobWithSteps(...keys: (typeof STEPS)[number]["key"][]): Job {
     racketBrand: "",
     racketType: "",
     racketColor: "",
+    ownString: false,
     stringType: "",
     stringColor: "",
     tensionValue: "",

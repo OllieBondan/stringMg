@@ -317,7 +317,7 @@ export default function JobList({
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
           <span className="truncate">
-            {job.stringType}
+            {job.ownString ? "Own string" : job.stringType}
             {job.tensionValue && ` @ ${job.tensionValue} ${job.tensionUnit}`}
           </span>
           <span className="whitespace-nowrap" suppressHydrationWarning>
