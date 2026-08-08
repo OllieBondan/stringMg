@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { saveJobOrder } from "@/lib/jobOrder";
 import { displayName } from "@/lib/permissions";
-import { Job, JobStatus, ROLE_LABELS, Role, STATUSES, STEPS, statusRank } from "@/lib/types";
+import { Job, JobStatus, ROLE_LABELS, Role, STATUSES, STEPS, nextStep, statusRank } from "@/lib/types";
 import StatusBadge, { STATUS_LABELS } from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
 
@@ -44,6 +44,7 @@ export default function JobList({
   const [racketTypeFilter, setRacketTypeFilter] = useState<string>(ALL);
   const [statusFilter, setStatusFilter] = useState<JobStatus | typeof ALL>(ALL);
   const [notesOnly, setNotesOnly] = useState(false);
+  const [myTurnOnly, setMyTurnOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("newest");
   const [group, setGroup] = useState<GroupKey>("none");
   const [exporting, setExporting] = useState(false);
@@ -108,7 +109,8 @@ export default function JobList({
     racketBrandFilter !== ALL ||
     racketTypeFilter !== ALL ||
     statusFilter !== ALL ||
-    notesOnly;
+    notesOnly ||
+    myTurnOnly;
 
   function clearFilters() {
     setNameQuery("");
@@ -116,6 +118,7 @@ export default function JobList({
     setRacketTypeFilter(ALL);
     setStatusFilter(ALL);
     setNotesOnly(false);
+    setMyTurnOnly(false);
   }
 
   const visible = useMemo(() => {
@@ -126,10 +129,22 @@ export default function JobList({
       if (racketTypeFilter !== ALL && j.racketType !== racketTypeFilter) return false;
       if (statusFilter !== ALL && j.status !== statusFilter) return false;
       if (notesOnly && !j.notes) return false;
+      if (myTurnOnly && nextStep(j)?.role !== userRole) return false;
       return true;
     });
     return [...filtered].sort(SORTERS[sort]);
-  }, [jobs, nameQuery, racketBrandFilter, racketTypeFilter, statusFilter, notesOnly, sort, SORTERS]);
+  }, [
+    jobs,
+    nameQuery,
+    racketBrandFilter,
+    racketTypeFilter,
+    statusFilter,
+    notesOnly,
+    myTurnOnly,
+    userRole,
+    sort,
+    SORTERS,
+  ]);
 
   const groups = useMemo(() => {
     if (group === "none") return [["", visible]] as [string, JobWithArchive[]][];
@@ -421,19 +436,36 @@ export default function JobList({
             </select>
           </span>
         </div>
-        <label
-          title="Only jobs with notes"
-          className="flex w-fit items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-        >
-          <input
-            type="checkbox"
-            checked={notesOnly}
-            onChange={(e) => setNotesOnly(e.target.checked)}
-            aria-label="Only jobs with notes"
-            className="h-4 w-4 accent-emerald-600"
-          />
-          📝 Only jobs with notes
-        </label>
+        <div className="flex flex-wrap gap-2">
+          {variant === "active" && userRole && (
+            <label
+              title="Only jobs waiting on your role"
+              className="flex w-fit items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+            >
+              <input
+                type="checkbox"
+                checked={myTurnOnly}
+                onChange={(e) => setMyTurnOnly(e.target.checked)}
+                aria-label="Only jobs waiting on your role"
+                className="h-4 w-4 accent-emerald-600"
+              />
+              🙋 My jobs ({ROLE_LABELS[userRole]})
+            </label>
+          )}
+          <label
+            title="Only jobs with notes"
+            className="flex w-fit items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <input
+              type="checkbox"
+              checked={notesOnly}
+              onChange={(e) => setNotesOnly(e.target.checked)}
+              aria-label="Only jobs with notes"
+              className="h-4 w-4 accent-emerald-600"
+            />
+            📝 Only jobs with notes
+          </label>
+        </div>
       </div>
 
       {selectMode && (
