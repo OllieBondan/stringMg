@@ -61,6 +61,18 @@ ALTER TABLE jobs
   ADD COLUMN IF NOT EXISTS archived_at text,
   ADD COLUMN IF NOT EXISTS archived_by text`;
 
+// One row per browser/device push subscription. A user can hold several
+// (phone + desktop, or re-subscribing after clearing site data leaves the
+// old endpoint stale until a failed send prunes it — see lib/push.ts).
+const PUSH_SUBSCRIPTIONS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  endpoint text PRIMARY KEY,
+  email text NOT NULL,
+  p256dh text NOT NULL,
+  auth text NOT NULL,
+  created_at text NOT NULL
+)`;
+
 let schemaReady: Promise<void> | null = null;
 
 /** Creates the tables on first use (idempotent, cached per process). */
@@ -71,6 +83,7 @@ export function ensureSchema(): Promise<void> {
       await sql.query(JOBS_TABLE_SQL);
       await sql.query(DELETED_TABLE_SQL);
       await sql.query(ARCHIVE_COLUMN_SQL);
+      await sql.query(PUSH_SUBSCRIPTIONS_TABLE_SQL);
     })().catch((err) => {
       schemaReady = null; // allow a retry on the next request
       throw err;

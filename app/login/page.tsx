@@ -67,7 +67,7 @@ export default async function LoginPage({
         >
           <button
             type="submit"
-            className="rounded-full bg-emerald-600 px-8 py-3 text-base font-semibold text-white shadow hover:bg-emerald-700 active:scale-95"
+            className="rounded-full bg-emerald-600 px-8 py-3 text-base font-semibold text-white shadow-md shadow-emerald-900/15 transition-all hover:bg-emerald-700 hover:shadow-lg active:scale-95"
           >
             Sign in with Google
           </button>

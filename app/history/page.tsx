@@ -1,6 +1,6 @@
 import Link from "next/link";
 import JobList from "@/components/JobList";
-import { isTasya } from "@/lib/permissions";
+import { roleOf } from "@/lib/permissions";
 import { listArchivedJobs } from "@/lib/repository";
 import { requireSessionUser } from "@/lib/session";
 
@@ -25,7 +25,7 @@ export default async function HistoryPage() {
           🏠 Main menu
         </Link>
       </div>
-      <JobList jobs={jobs} variant="history" canConfirmTasya={isTasya(user.email)} />
+      <JobList jobs={jobs} variant="history" userRole={roleOf(user.email)} />
     </div>
   );
 }

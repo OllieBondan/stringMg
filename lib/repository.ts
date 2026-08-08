@@ -1,12 +1,14 @@
 import { stringify } from "csv-stringify/sync";
 import { db, ensureSchema } from "./db";
-import { isTasya } from "./permissions";
+import { canActOnStep } from "./permissions";
 import {
   Job,
   JobSpecs,
   JobSpecsInput,
   JobStatus,
+  ROLE_LABELS,
   STEPS,
+  Step,
   TENSION_UNITS,
   TensionUnit,
   deriveStatus,
@@ -273,19 +275,36 @@ export async function advanceStep(
   user: string,
   expectedUpdatedAt?: string
 ): Promise<Job> {
-  return mutateJob(
+  const job = await mutateJob(
     id,
     expectedUpdatedAt,
     (job) => {
       const step = nextStep(job);
       if (!step) throw new ConflictError("Job is already complete");
-      if (step.key === "tasyaReceived" && !isTasya(user)) {
-        throw new ForbiddenError("Only Tasya can confirm that the payment was received");
+      if (!canActOnStep(user, step)) {
+        throw new ForbiddenError(`Only ${ROLE_LABELS[step.role]} can do this: ${step.action}`);
       }
       job.steps[step.key] = { at: new Date().toISOString(), by: user };
     },
     user
   );
+  const upcoming = nextStep(job);
+  if (upcoming) notifyNextRole(job, upcoming).catch((err) => console.error("Push notify failed", err));
+  return job;
+}
+
+/**
+ * Fire-and-forget: notifying the next role must never fail or delay the
+ * step-advance response. Dynamic import avoids a module cycle — lib/push.ts
+ * itself calls back into this file for subscription lookups.
+ */
+async function notifyNextRole(job: Job, step: Step): Promise<void> {
+  const { sendPushToRole } = await import("./push");
+  await sendPushToRole(step.role, {
+    title: `${ROLE_LABELS[step.role]}: ${job.customerName}`,
+    body: step.action,
+    url: `/jobs/${job.id}`,
+  });
 }
 
 export async function undoLastStep(
@@ -302,8 +321,8 @@ export async function undoLastStep(
       if (step.key === "received") {
         throw new ConflictError("Cannot undo the intake step — delete the job instead");
       }
-      if (step.key === "tasyaReceived" && !isTasya(user)) {
-        throw new ForbiddenError("Only Tasya can undo her payment confirmation");
+      if (!canActOnStep(user, step)) {
+        throw new ForbiddenError(`Only ${ROLE_LABELS[step.role]} can undo this step`);
       }
       delete job.steps[step.key];
     },
@@ -392,4 +411,42 @@ export async function archiveOldCompleted(user: string): Promise<number> {
     [new Date().toISOString(), user, archiveCutoffIso()]
   )) as Row[];
   return rows.length;
+}
+
+export interface PushSubscription {
+  endpoint: string;
+  email: string;
+  p256dh: string;
+  auth: string;
+}
+
+/** Upsert so re-enabling notifications on the same device/browser is idempotent. */
+export async function saveSubscription(sub: PushSubscription): Promise<void> {
+  await ensureSchema();
+  await db().query(
+    `INSERT INTO push_subscriptions (endpoint, email, p256dh, auth, created_at)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (endpoint) DO UPDATE SET email = $2, p256dh = $3, auth = $4`,
+    [sub.endpoint, sub.email.toLowerCase(), sub.p256dh, sub.auth, new Date().toISOString()]
+  );
+}
+
+export async function removeSubscription(endpoint: string): Promise<void> {
+  await ensureSchema();
+  await db().query("DELETE FROM push_subscriptions WHERE endpoint = $1", [endpoint]);
+}
+
+export async function subscriptionsForEmails(emails: string[]): Promise<PushSubscription[]> {
+  if (emails.length === 0) return [];
+  await ensureSchema();
+  const rows = (await db().query(
+    "SELECT endpoint, email, p256dh, auth FROM push_subscriptions WHERE email = ANY($1)",
+    [emails.map((e) => e.toLowerCase())]
+  )) as Row[];
+  return rows.map((r) => ({
+    endpoint: r.endpoint ?? "",
+    email: r.email ?? "",
+    p256dh: r.p256dh ?? "",
+    auth: r.auth ?? "",
+  }));
 }

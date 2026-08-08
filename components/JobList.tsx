@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { formatDate, formatDateTime, shortUser } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { saveJobOrder } from "@/lib/jobOrder";
-import { Job, JobStatus, STATUSES, STEPS, statusRank } from "@/lib/types";
+import { displayName } from "@/lib/permissions";
+import { Job, JobStatus, ROLE_LABELS, Role, STATUSES, STEPS, statusRank } from "@/lib/types";
 import StatusBadge, { STATUS_LABELS } from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
 
@@ -21,19 +22,19 @@ function monthLabel(iso: string): string {
 }
 
 const selectClass =
-  "shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
+  "shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm transition-colors hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500";
 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 export default function JobList({
   jobs,
   variant = "active",
-  canConfirmTasya = false,
+  userRole = null,
   archivableCount = 0,
 }: {
   jobs: JobWithArchive[];
   variant?: "active" | "history";
-  canConfirmTasya?: boolean;
+  userRole?: Role | null;
   archivableCount?: number;
 }) {
   useFreshData();
@@ -156,7 +157,7 @@ export default function JobList({
   const statusIndex = statusFilter ? STEPS.findIndex((s) => s.status === statusFilter) : -1;
   const nextStepDef = statusIndex >= 0 && statusIndex < STEPS.length - 1 ? STEPS[statusIndex + 1] : null;
   const selectAvailable = variant === "active" && nextStepDef !== null;
-  const bulkForbidden = nextStepDef?.key === "tasyaReceived" && !canConfirmTasya;
+  const bulkForbidden = nextStepDef !== null && userRole !== nextStepDef.role;
 
   useEffect(() => {
     setSelected(new Set());
@@ -307,7 +308,7 @@ export default function JobList({
           <span className="whitespace-nowrap" suppressHydrationWarning>
             {variant === "history"
               ? `Archived ${formatDate(dateOf(job))}`
-              : `${formatDate(dateOf(job))} · ${shortUser(job.createdBy)}`}
+              : `${formatDate(dateOf(job))} · ${displayName(job.createdBy)}`}
           </span>
         </div>
         <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500" suppressHydrationWarning>
@@ -325,7 +326,7 @@ export default function JobList({
           value={nameQuery}
           onChange={(e) => setNameQuery(e.target.value)}
           placeholder="Filter by customer name…"
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-emerald-500"
         />
         <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <select
@@ -436,7 +437,7 @@ export default function JobList({
       </div>
 
       {selectMode && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <span className="text-slate-600 dark:text-slate-300">
             {selected.size} selected
             {selected.size < visible.length && (
@@ -451,7 +452,7 @@ export default function JobList({
           <span className="flex-1" />
           {bulkForbidden ? (
             <span className="text-xs text-slate-500 dark:text-slate-400">
-              Only Tasya can confirm this step
+              Only {nextStepDef && ROLE_LABELS[nextStepDef.role]} can do this step
             </span>
           ) : (
             <button
@@ -517,7 +518,7 @@ export default function JobList({
         <button
           onClick={archiveOld}
           disabled={archiving}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/50"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/50"
         >
           {archiving
             ? "Archiving…"
@@ -555,7 +556,7 @@ export default function JobList({
         return (
         <section key={label || "all"}>
           {label && (
-            <h2 className="sticky top-14 z-10 -mx-1 mb-1 rounded bg-slate-100/95 px-1 py-1 text-sm font-semibold text-slate-600 backdrop-blur dark:bg-slate-900/95 dark:text-slate-300">
+            <h2 className="sticky top-14 z-10 -mx-1 mb-1.5 rounded-md bg-slate-50/95 px-1.5 py-1.5 text-sm font-semibold text-slate-600 backdrop-blur dark:bg-slate-950/95 dark:text-slate-300">
               {label} <span className="font-normal text-slate-400 dark:text-slate-500">({groupJobs.length})</span>
             </h2>
           )}
@@ -580,7 +581,7 @@ export default function JobList({
                   <button
                     type="button"
                     onClick={() => toggleSelect(job.id)}
-                    className={`block w-full rounded-xl border p-3 text-left shadow-sm ${
+                    className={`block w-full rounded-xl border p-3.5 text-left shadow-sm transition-colors ${
                       selected.has(job.id)
                         ? "border-emerald-500 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-900/20"
                         : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
@@ -602,7 +603,7 @@ export default function JobList({
                 ) : (
                   <Link
                     href={`/jobs/${job.id}`}
-                    className="block rounded-xl border border-slate-200 bg-white p-3 shadow-sm active:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:active:bg-slate-700"
+                    className="block rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:shadow-black/30 dark:active:bg-slate-700"
                   >
                     {renderCardBody(job)}
                   </Link>
@@ -618,7 +619,7 @@ export default function JobList({
         <Link
           href="/jobs/new"
           aria-label="New job"
-          className="fixed bottom-6 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-3xl font-light text-white shadow-lg hover:bg-emerald-700 active:scale-95"
+          className="fixed bottom-6 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-3xl font-light text-white shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 hover:bg-emerald-700 hover:shadow-xl active:scale-95"
         >
           +
         </Link>

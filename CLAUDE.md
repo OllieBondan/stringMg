@@ -7,14 +7,35 @@ Guidance for Claude Code when working in this repository.
 A small mobile-first web app that tracks badminton racket stringing jobs
 through a fixed 7-step workflow (received from customer → to Titon → back from
 Titon → returned to owner → paid → forwarded to Tasya → confirmed received by
-Tasya). Low volume (~2000 records), three users.
+Tasya). Low volume (~2000 records), five users across three roles.
 
 - **Stack:** Next.js 15 (App Router) + TypeScript, Tailwind CSS 4
 - **Auth:** Auth.js (NextAuth v5), Google provider only, email allowlist
-  (`ALLOWED_EMAILS`); only Tasya (`TASYA_EMAILS`) may confirm the final step
+  (`ALLOWED_EMAILS`)
+- **Roles:** every workflow step belongs to exactly one role (`STEPS[].role`
+  in `lib/types.ts`) — only members of that role can advance/undo it. Role
+  membership is env-configurable (`FRONT_EMAILS`, `STRINGER_EMAILS`,
+  `PAYEE_EMAILS`, comma-separated; defaults in `lib/permissions.ts`).
+  Front (Agung/Esti/Aisha) owns steps 1–5 (receive/hand off/receive
+  back/return/payment received); Payee (Tasya) owns steps 6–7 (forward
+  payment/confirm received). Stringer (Titon) strings the racket physically
+  but owns no step transition today — view-only in the workflow. Display
+  names for the UI come from `displayName()` in `lib/permissions.ts`, falling
+  back to the email's local part for unmapped addresses.
 - **Storage:** Neon Postgres (`DATABASE_URL`), via `@neondatabase/serverless`
-  — tables `jobs` and `deleted_jobs`, schema auto-created on first use
-  (`lib/db.ts`). Migrated from a CSV-in-Vercel-Blob design in v2.0.0.
+  — tables `jobs`, `deleted_jobs`, `push_subscriptions`, schema auto-created
+  on first use (`lib/db.ts`). Migrated from a CSV-in-Vercel-Blob design in
+  v2.0.0.
+- **Notifications:** Web Push (`lib/push.ts`), role-aware — when a step
+  completes, everyone holding the *next* step's role gets a push notification
+  (`advanceStep` in `lib/repository.ts` fires it, fire-and-forget: a failed
+  send never fails the step-advance request). Opt-in per device via the bell
+  icon in the header (`components/PushOptIn.tsx`); subscriptions live in
+  `push_subscriptions`, keyed by push endpoint, pruned automatically when the
+  push service reports one as gone (404/410). Entirely disabled — silently a
+  no-op — if `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` aren't
+  set. On iPhone, push only works from an installed PWA (Add to Home
+  Screen), not a plain Safari tab — an iOS/Safari limitation, not a bug here.
 - **Hosting:** Vercel (GitHub repo: OllieBondan/stringMg)
 - **Tests:** Vitest
 
@@ -66,9 +87,12 @@ app/                 Pages (App Router) + API route handlers
   api/export/        Creates a Google Sheet via the user's OAuth token
   api/download/      CSV download (generated from the DB, active + archived)
   history/           Archived-jobs page (JobList in "history" variant)
-components/          Client components (JobList, JobForm, JobDetail, StatusBadge)
+  api/push/          subscribe/unsubscribe/vapid-key for Web Push opt-in
+components/          Client components (JobList, JobForm, JobDetail, StatusBadge,
+                     PushOptIn)
 lib/                 types.ts, options.ts, db.ts, repository.ts, permissions.ts,
-                     auth.ts, session.ts, api.ts, format.ts
+                     auth.ts, session.ts, api.ts, format.ts, push.ts
+public/sw.js         Service worker: receives push events, handles notification clicks
 data/
   records.sample.csv Reference/sample of the export schema
 ```
@@ -100,10 +124,10 @@ npm run typecheck  # tsc --noEmit
 
 ## Testing
 
-- Pure logic (steps/status in `lib/types.test.ts`, the Tasya permission gate
-  in `lib/permissions.test.ts`) is unit-tested; the SQL layer is verified by
-  driving the dev server end-to-end against the real Neon DB (create →
-  advance → conflict → delete), cleaning up test records after
+- Pure logic (steps/status in `lib/types.test.ts`, role membership/gating/
+  display names in `lib/permissions.test.ts`) is unit-tested; the SQL layer
+  is verified by driving the dev server end-to-end against the real Neon DB
+  (create → advance → conflict → delete), cleaning up test records after
 
 ## Code Style
 

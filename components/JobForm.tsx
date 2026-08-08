@@ -31,7 +31,7 @@ function SelectWithOther({
   const isPreset = value === "" || options.includes(value);
   const [other, setOther] = useState(!isPreset);
   const inputClass =
-    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
+    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500";
 
   // No preset list (e.g. type/series of a custom brand): plain text input,
   // no pointless empty dropdown in between.
@@ -120,10 +120,10 @@ function ChipRadio({
         {options.map((o) => (
           <label
             key={o}
-            className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${
+            className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm shadow-sm transition-colors ${
               value === o
                 ? "border-emerald-600 bg-emerald-600 text-white"
-                : "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-500"
             }`}
           >
             <input
@@ -242,7 +242,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
             onChange={(e) => setReceivedDate(e.target.value)}
             required
             suppressHydrationWarning
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-transparent [-webkit-text-fill-color:transparent] [color-scheme:light] dark:border-slate-600 dark:bg-slate-800 dark:[color-scheme:dark]"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-transparent shadow-sm outline-none transition-colors [-webkit-text-fill-color:transparent] [color-scheme:light] focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:[color-scheme:dark] dark:focus:border-emerald-500"
           />
           <span
             aria-hidden
@@ -263,11 +263,11 @@ export default function JobForm({ initial }: { initial?: Job }) {
           onChange={(e) => set("customerName")(e.target.value)}
           required
           placeholder="Who handed over the racket"
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500"
         />
       </label>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           Racket
         </h2>
@@ -305,7 +305,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           String
         </h2>
@@ -338,17 +338,17 @@ export default function JobForm({ initial }: { initial?: Job }) {
                 value={specs.tensionValue}
                 onChange={(e) => set("tensionValue")(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500"
               />
             </label>
             <div className="flex gap-2 pb-0.5">
               {TENSION_UNITS.map((u) => (
                 <label
                   key={u}
-                  className={`cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium ${
+                  className={`cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium shadow-sm transition-colors ${
                     specs.tensionUnit === u
                       ? "border-emerald-600 bg-emerald-600 text-white"
-                      : "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                      : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-500"
                   }`}
                 >
                   <input
@@ -375,7 +375,7 @@ export default function JobForm({ initial }: { initial?: Job }) {
           value={specs.notes}
           onChange={(e) => set("notes")(e.target.value)}
           rows={2}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-emerald-500"
         />
       </label>
 
@@ -389,14 +389,14 @@ export default function JobForm({ initial }: { initial?: Job }) {
         <button
           type="submit"
           disabled={saving}
-          className="flex-1 rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white shadow hover:bg-emerald-700 active:scale-[.99] disabled:opacity-50"
+          className="flex-1 rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white shadow-md shadow-emerald-900/15 transition-all hover:bg-emerald-700 hover:shadow-lg active:scale-[.99] disabled:opacity-50"
         >
           {saving ? "Saving…" : initial ? "Save changes" : "Add racket"}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/50"
         >
           Cancel
         </button>

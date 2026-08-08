@@ -29,7 +29,7 @@ export default function AboutPage() {
         </p>
       </div>
 
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm dark:border-slate-700 dark:bg-slate-800">
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
         {row("Version", `v${version}`)}
         {buildDate &&
           row(

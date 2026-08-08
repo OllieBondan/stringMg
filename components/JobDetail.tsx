@@ -3,18 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { formatDateTime, shortUser } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { displayName } from "@/lib/permissions";
 import { readJobOrder } from "@/lib/jobOrder";
-import { Job, STEPS, lastCompletedStep, nextStep } from "@/lib/types";
+import { Job, ROLE_LABELS, Role, STEPS, lastCompletedStep, nextStep } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
 
 export default function JobDetail({
   job: initialJob,
-  canConfirmTasya,
+  userRole,
 }: {
   job: Job;
-  canConfirmTasya: boolean;
+  userRole: Role | null;
 }) {
   useFreshData();
   const router = useRouter();
@@ -117,10 +118,10 @@ export default function JobDetail({
     ) : null;
 
   const navButtonClass = (enabled: boolean) =>
-    `flex-1 rounded-lg border px-3 py-2 text-center text-sm font-medium ${
+    `flex-1 rounded-lg border px-3 py-2 text-center text-sm font-medium shadow-sm transition-colors ${
       enabled
-        ? "border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50"
-        : "pointer-events-none border-slate-200 text-slate-300 dark:border-slate-700 dark:text-slate-600"
+        ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/50"
+        : "pointer-events-none border-slate-200 text-slate-300 shadow-none dark:border-slate-700 dark:text-slate-600"
     }`;
 
   return (
@@ -154,24 +155,24 @@ export default function JobDetail({
       <div className="flex gap-2">
         <Link
           href="/jobs/new"
-          className="flex-1 rounded-lg border border-emerald-600 px-3 py-2 text-center text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+          className="flex-1 rounded-lg border border-emerald-600 bg-white px-3 py-2 text-center text-sm font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 dark:bg-slate-800 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
         >
           + Add another racket
         </Link>
         <Link
           href="/"
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50"
+          className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/50"
         >
           🏠 Main menu
         </Link>
       </div>
 
       <div className="flex items-start justify-between gap-3">
-        <h1 className="text-xl font-bold">{job.customerName}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{job.customerName}</h1>
         <StatusBadge status={job.status} />
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-800">
+      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
         {spec("Racket", [job.racketBrand, job.racketType].filter(Boolean).join(" "))}
         {spec("Racket color", job.racketColor)}
         {spec("String", job.stringType)}
@@ -188,7 +189,7 @@ export default function JobDetail({
         </div>
       </div>
 
-      <ol className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+      <ol className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         {STEPS.map((step, i) => {
           const stamp = job.steps[step.key];
           const isNext = next?.key === step.key;
@@ -196,7 +197,7 @@ export default function JobDetail({
             <li key={step.key} className="relative flex gap-3 pb-4 last:pb-0">
               {i < STEPS.length - 1 && (
                 <span
-                  className={`absolute left-[13px] top-7 h-full w-0.5 ${
+                  className={`absolute left-[13px] top-7 h-full w-0.5 transition-colors ${
                     stamp ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-700"
                   }`}
                 />
@@ -204,9 +205,9 @@ export default function JobDetail({
               <span
                 className={`z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
                   stamp
-                    ? "bg-emerald-500 text-white"
+                    ? "bg-emerald-500 text-white shadow-sm shadow-emerald-900/20"
                     : isNext
-                      ? "border-2 border-emerald-500 bg-white text-emerald-600 dark:bg-slate-800"
+                      ? "border-2 border-emerald-500 bg-white text-emerald-600 shadow-sm ring-4 ring-emerald-500/10 dark:bg-slate-800"
                       : "border-2 border-slate-200 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
                 }`}
               >
@@ -222,10 +223,10 @@ export default function JobDetail({
                 </p>
                 {stamp && (
                   <p className="text-xs text-slate-500 dark:text-slate-400" suppressHydrationWarning>
-                    {formatDateTime(stamp.at)} · by {shortUser(stamp.by)}
+                    {formatDateTime(stamp.at)} · by {displayName(stamp.by)}
                     {last?.key === step.key &&
                       step.key !== "received" &&
-                      (step.key !== "tasyaReceived" || canConfirmTasya) && (
+                      userRole === step.role && (
                       <>
                         {" · "}
                         <button
@@ -240,15 +241,15 @@ export default function JobDetail({
                   </p>
                 )}
                 {isNext &&
-                  (step.key === "tasyaReceived" && !canConfirmTasya ? (
+                  (userRole !== step.role ? (
                     <p className="mt-2 rounded-xl bg-slate-100 px-3 py-3 text-center text-sm text-slate-500 dark:bg-slate-700/50 dark:text-slate-400">
-                      Waiting for Tasya to confirm she received the payment
+                      Waiting for {ROLE_LABELS[step.role]}: {step.action}
                     </p>
                   ) : (
                     <button
                       onClick={() => patch("advance")}
                       disabled={busy}
-                      className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white shadow hover:bg-emerald-700 active:scale-[.99] disabled:opacity-50"
+                      className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white shadow-md shadow-emerald-900/15 transition-all hover:bg-emerald-700 hover:shadow-lg active:scale-[.99] disabled:opacity-50"
                     >
                       {busy ? "Saving…" : step.action}
                     </button>
@@ -266,8 +267,8 @@ export default function JobDetail({
       )}
 
       <div className="text-xs text-slate-400 dark:text-slate-500" suppressHydrationWarning>
-        Created {formatDateTime(job.createdAt)} by {shortUser(job.createdBy)} · Last change{" "}
-        {formatDateTime(job.updatedAt)} by {shortUser(job.updatedBy)}
+        Created {formatDateTime(job.createdAt)} by {displayName(job.createdBy)} · Last change{" "}
+        {formatDateTime(job.updatedAt)} by {displayName(job.updatedBy)}
       </div>
 
       <button

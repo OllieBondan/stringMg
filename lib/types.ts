@@ -2,8 +2,24 @@ export const TENSION_UNITS = ["Kg", "Lbs"] as const;
 export type TensionUnit = (typeof TENSION_UNITS)[number];
 
 /**
+ * The three job roles. Every workflow step below belongs to exactly one —
+ * only a user holding that role may advance or undo it (see lib/permissions.ts).
+ * Stringer currently owns no step directly (Front confirms the physical
+ * handoff back from stringing) — it's a view-only role in the workflow today.
+ */
+export const ROLES = ["front", "stringer", "payee"] as const;
+export type Role = (typeof ROLES)[number];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  front: "Front Desk",
+  stringer: "Stringer",
+  payee: "Payee",
+};
+
+/**
  * The fixed 7-step workflow of a stringing job, in order.
  * `column` is the CSV export column prefix (`<column>_at` / `<column>_by`).
+ * `role` is who may advance/undo this specific step.
  */
 export const STEPS = [
   {
@@ -12,6 +28,7 @@ export const STEPS = [
     label: "Racket received from customer",
     action: "Mark racket received",
     status: "RECEIVED",
+    role: "front",
   },
   {
     key: "toTiton",
@@ -19,6 +36,7 @@ export const STEPS = [
     label: "Handed over to Titon",
     action: "Hand over to Titon",
     status: "WITH_TITON",
+    role: "front",
   },
   {
     key: "fromTiton",
@@ -26,6 +44,7 @@ export const STEPS = [
     label: "Received back from Titon",
     action: "Receive back from Titon",
     status: "STRUNG",
+    role: "front",
   },
   {
     key: "returned",
@@ -33,6 +52,7 @@ export const STEPS = [
     label: "Returned to owner",
     action: "Return to owner",
     status: "RETURNED",
+    role: "front",
   },
   {
     key: "paid",
@@ -40,6 +60,7 @@ export const STEPS = [
     label: "Payment received",
     action: "Record payment received",
     status: "PAID",
+    role: "front",
   },
   {
     key: "forwarded",
@@ -47,6 +68,7 @@ export const STEPS = [
     label: "Payment forwarded to Tasya",
     action: "Forward payment to Tasya",
     status: "FORWARDED",
+    role: "payee",
   },
   {
     key: "tasyaReceived",
@@ -54,6 +76,7 @@ export const STEPS = [
     label: "Payment received by Tasya",
     action: "Confirm Tasya received payment",
     status: "DONE",
+    role: "payee",
   },
 ] as const;
 
