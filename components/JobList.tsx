@@ -6,7 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { saveJobOrder } from "@/lib/jobOrder";
 import { displayName } from "@/lib/permissions";
+import { jobListShareText, jobShareText, whatsappShareUrl } from "@/lib/share";
 import { Job, JobStatus, ROLE_LABELS, Role, STATUSES, STEPS, nextStep, statusRank } from "@/lib/types";
+import ShareIcon from "./ShareIcon";
 import StatusBadge, { STATUS_LABELS } from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
 
@@ -243,6 +245,23 @@ export default function JobList({
     }
   }
 
+  function shareJob(job: JobWithArchive) {
+    const text = jobShareText(job, window.location.origin, STATUS_LABELS);
+    window.open(whatsappShareUrl(text), "_blank");
+  }
+
+  function shareList() {
+    const label = variant === "history" ? "Job history" : filtersActive ? "Filtered jobs" : "Jobs";
+    const text = jobListShareText(
+      visible,
+      window.location.origin,
+      variant === "history" ? "/history" : "/",
+      label,
+      STATUS_LABELS
+    );
+    window.open(whatsappShareUrl(text), "_blank");
+  }
+
   async function exportToSheet() {
     setExporting(true);
     setExportMsg(null);
@@ -297,7 +316,29 @@ export default function JobList({
               </span>
             )}
           </span>
-          <StatusBadge status={job.status} />
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label="Share this job on WhatsApp"
+              title="Share on WhatsApp"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                shareJob(job);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                e.stopPropagation();
+                shareJob(job);
+              }}
+              className="flex cursor-pointer items-center rounded-full p-0.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:text-slate-500 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400"
+            >
+              <ShareIcon className="h-4 w-4" />
+            </span>
+            <StatusBadge status={job.status} />
+          </span>
         </div>
         {notesOpen && (
           <div className="mt-1.5 rounded-lg bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
@@ -549,6 +590,18 @@ export default function JobList({
         >
           Download CSV
         </a>
+        <button
+          onClick={shareList}
+          disabled={visible.length === 0}
+          title={
+            filtersActive
+              ? "Share the filtered list on WhatsApp"
+              : "Share the whole list on WhatsApp"
+          }
+          className="inline-flex items-center gap-1 font-medium text-emerald-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-emerald-400"
+        >
+          <ShareIcon className="h-4 w-4" /> Share
+        </button>
       </div>
       {exportMsg && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200">

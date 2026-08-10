@@ -6,8 +6,10 @@ import { useEffect, useState } from "react";
 import { formatDateTime } from "@/lib/format";
 import { displayName } from "@/lib/permissions";
 import { readJobOrder } from "@/lib/jobOrder";
+import { jobShareText, whatsappShareUrl } from "@/lib/share";
 import { Job, ROLE_LABELS, Role, STEPS, lastCompletedStep, nextStep } from "@/lib/types";
-import StatusBadge from "./StatusBadge";
+import ShareIcon from "./ShareIcon";
+import StatusBadge, { STATUS_LABELS } from "./StatusBadge";
 import { useFreshData } from "./useFreshData";
 
 export default function JobDetail({
@@ -88,6 +90,11 @@ export default function JobDetail({
     } finally {
       setBusy(false);
     }
+  }
+
+  function share() {
+    const text = jobShareText(job, window.location.origin, STATUS_LABELS);
+    window.open(whatsappShareUrl(text), "_blank");
   }
 
   async function remove() {
@@ -176,7 +183,18 @@ export default function JobDetail({
           )}
           <h1 className="text-2xl font-bold tracking-tight">{job.customerName}</h1>
         </div>
-        <StatusBadge status={job.status} />
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={share}
+            aria-label="Share this job on WhatsApp"
+            title="Share on WhatsApp"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400"
+          >
+            <ShareIcon className="h-5 w-5" />
+          </button>
+          <StatusBadge status={job.status} />
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
