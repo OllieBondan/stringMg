@@ -93,6 +93,14 @@ export interface StepStamp {
 
 export interface Job {
   id: string;
+  /**
+   * Human-friendly label, e.g. "260810-01" — YYMMDD (from the "received"
+   * date) + a daily sequence number reset each day (lib/repository.ts
+   * nextShortId). Assigned once at creation and never recomputed, so editing
+   * the received date later does not change a label someone may have
+   * already written on a physical racket tag.
+   */
+  shortId: string;
   createdAt: string;
   createdBy: string;
   customerName: string;

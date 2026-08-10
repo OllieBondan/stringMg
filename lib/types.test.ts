@@ -16,6 +16,7 @@ function jobWithSteps(...keys: (typeof STEPS)[number]["key"][]): Job {
   for (const k of keys) steps[k] = STAMP;
   return {
     id: "1",
+    shortId: "260101-01",
     createdAt: STAMP.at,
     createdBy: STAMP.by,
     customerName: "Test",

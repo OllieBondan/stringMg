@@ -127,8 +127,8 @@ const STEPS = [
 ];
 
 const CSV_HEADER = [
-  "id", "created_at", "created_by", "customer_name", "racket_brand", "racket_type",
-  "racket_color", "string_type", "string_color", "tension_value", "tension_unit", "status",
+  "id", "short_id", "created_at", "created_by", "customer_name", "racket_brand", "racket_type",
+  "racket_color", "own_string", "string_type", "string_color", "tension_value", "tension_unit", "status",
   ...STEPS.flatMap((s) => [`${s.column}_at`, `${s.column}_by`]),
   "notes", "updated_at", "updated_by",
 ];
@@ -145,6 +145,16 @@ for (const [status, weight] of Object.entries(WEIGHTS)) {
 while (statusPlan.length < COUNT) statusPlan.push("DONE");
 while (statusPlan.length > COUNT) statusPlan.pop();
 shuffle(statusPlan);
+
+// Mirrors lib/repository.ts nextShortId's "YYMMDD-NN" scheme, per-day
+// sequence tracked in-process since this script bypasses the app entirely.
+const shortIdCounters = new Map();
+function nextShortId(receivedAtIso) {
+  const day = receivedAtIso.slice(2, 10).replace(/-/g, "");
+  const n = (shortIdCounters.get(day) ?? 0) + 1;
+  shortIdCounters.set(day, n);
+  return `${day}-${String(n).padStart(2, "0")}`;
+}
 
 function buildJob(targetStatus, isOldDone) {
   const stepCount = STEPS.findIndex((s) => s.status === targetStatus) + 1;
@@ -183,16 +193,20 @@ function buildJob(targetStatus, isOldDone) {
   }
   const last = steps[STEPS[stepCount - 1].key];
 
+  const ownString = Math.random() < 0.08;
+
   const row = {
     id: crypto.randomUUID(),
+    short_id: nextShortId(receivedAt),
     created_at: receivedAt,
     created_by: steps.received.by,
     customer_name: customerName(),
     racket_brand: brand,
     racket_type: racketType,
     racket_color: rand(COLORS),
-    string_type: stringType,
-    string_color: rand(COLORS),
+    own_string: ownString,
+    string_type: ownString ? "" : stringType,
+    string_color: ownString ? "" : rand(COLORS),
     tension_value: tensionValue,
     tension_unit: tensionUnit,
     status: targetStatus,
@@ -212,9 +226,11 @@ function buildJob(targetStatus, isOldDone) {
 async function main() {
   await sql.query(`
     CREATE TABLE IF NOT EXISTS jobs (
-      id text PRIMARY KEY, created_at text NOT NULL, created_by text NOT NULL,
+      id text PRIMARY KEY, short_id text NOT NULL DEFAULT '',
+      created_at text NOT NULL, created_by text NOT NULL,
       customer_name text NOT NULL, racket_brand text NOT NULL DEFAULT '',
       racket_type text NOT NULL DEFAULT '', racket_color text NOT NULL DEFAULT '',
+      own_string boolean NOT NULL DEFAULT false,
       string_type text NOT NULL DEFAULT '', string_color text NOT NULL DEFAULT '',
       tension_value text NOT NULL DEFAULT '', tension_unit text NOT NULL, status text NOT NULL,
       ${STEPS.map((s) => `${s.column}_at text, ${s.column}_by text`).join(", ")},
@@ -222,6 +238,9 @@ async function main() {
       archived_at text, archived_by text
     )
   `);
+  // Existing branch copied from production before this column existed.
+  await sql.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS short_id text NOT NULL DEFAULT ''`);
+  await sql.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS own_string boolean NOT NULL DEFAULT false`);
 
   const columnList = CSV_HEADER.join(", ");
   const placeholders = CSV_HEADER.map((_, i) => `$${i + 1}`).join(", ");

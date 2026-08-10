@@ -168,7 +168,12 @@ export default function JobDetail({
       </div>
 
       <div className="flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">{job.customerName}</h1>
+        <div className="min-w-0">
+          {job.shortId && (
+            <p className="font-mono text-xs text-slate-400 dark:text-slate-500">{job.shortId}</p>
+          )}
+          <h1 className="text-2xl font-bold tracking-tight">{job.customerName}</h1>
+        </div>
         <StatusBadge status={job.status} />
       </div>
 

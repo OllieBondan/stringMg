@@ -27,6 +27,7 @@ const STEP_COLUMNS = STEPS.map((s) => `${s.column}_at text, ${s.column}_by text`
 const JOBS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS jobs (
   id text PRIMARY KEY,
+  short_id text NOT NULL DEFAULT '',
   created_at text NOT NULL,
   created_by text NOT NULL,
   customer_name text NOT NULL,
@@ -73,6 +74,17 @@ const OWN_STRING_COLUMN_DELETED_SQL = OWN_STRING_COLUMN_SQL.replace(
   "ALTER TABLE deleted_jobs"
 );
 
+// short_id: human-friendly "YYMMDD-NN" label (lib/repository.ts nextShortId),
+// added after the initial release — existing rows keep the '' default until
+// a one-off backfill (see scripts/backfill-short-ids.mjs) fills them in.
+const SHORT_ID_COLUMN_SQL = `
+ALTER TABLE jobs
+  ADD COLUMN IF NOT EXISTS short_id text NOT NULL DEFAULT ''`;
+const SHORT_ID_COLUMN_DELETED_SQL = SHORT_ID_COLUMN_SQL.replace(
+  "ALTER TABLE jobs",
+  "ALTER TABLE deleted_jobs"
+);
+
 // One row per browser/device push subscription. A user can hold several
 // (phone + desktop, or re-subscribing after clearing site data leaves the
 // old endpoint stale until a failed send prunes it — see lib/push.ts).
@@ -83,6 +95,17 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   p256dh text NOT NULL,
   auth text NOT NULL,
   created_at text NOT NULL
+)`;
+
+// One row per calendar day (YYMMDD, from the job's received date), holding
+// the last sequence number issued for that day. Incremented atomically via
+// INSERT ... ON CONFLICT DO UPDATE ... RETURNING (see repository.ts
+// nextShortId) — Postgres serializes concurrent upserts on the same key, so
+// two simultaneous job creations can never receive the same short ID.
+const JOB_SEQ_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS job_seq (
+  day text PRIMARY KEY,
+  n int NOT NULL
 )`;
 
 let schemaReady: Promise<void> | null = null;
@@ -97,7 +120,10 @@ export function ensureSchema(): Promise<void> {
       await sql.query(ARCHIVE_COLUMN_SQL);
       await sql.query(OWN_STRING_COLUMN_SQL);
       await sql.query(OWN_STRING_COLUMN_DELETED_SQL);
+      await sql.query(SHORT_ID_COLUMN_SQL);
+      await sql.query(SHORT_ID_COLUMN_DELETED_SQL);
       await sql.query(PUSH_SUBSCRIPTIONS_TABLE_SQL);
+      await sql.query(JOB_SEQ_TABLE_SQL);
     })().catch((err) => {
       schemaReady = null; // allow a retry on the next request
       throw err;

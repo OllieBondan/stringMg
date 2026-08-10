@@ -30,6 +30,7 @@ export class ForbiddenError extends Error {}
 /** Column order for the CSV/Sheets export; mirrors the DB columns 1:1. */
 export const CSV_HEADER = [
   "id",
+  "short_id",
   "created_at",
   "created_by",
   "customer_name",
@@ -55,6 +56,7 @@ function jobToRow(job: Job): string[] {
   });
   return [
     job.id,
+    job.shortId,
     job.createdAt,
     job.createdBy,
     job.customerName,
@@ -85,6 +87,7 @@ function rowToJob(row: Row): Job {
   }
   return {
     id: (row.id as string) ?? "",
+    shortId: (row.short_id as string) ?? "",
     createdAt: (row.created_at as string) ?? "",
     createdBy: (row.created_by as string) ?? "",
     customerName: (row.customer_name as string) ?? "",
@@ -112,6 +115,7 @@ function jobValues(job: Job): (string | boolean | null)[] {
   });
   return [
     job.id,
+    job.shortId,
     job.createdAt,
     job.createdBy,
     job.customerName,
@@ -211,19 +215,43 @@ function receivedStamp(receivedDate: string | undefined, fallbackIso: string): s
   return `${receivedDate}T12:00:00.000Z`;
 }
 
+/**
+ * Human-friendly job label: "YYMMDD-NN", keyed off the received date (not
+ * the server creation time) so it reads naturally even for backfilled
+ * intake. NN is a per-day sequence allocated atomically via job_seq — an
+ * upsert Postgres serializes, so concurrent creates on the same day can
+ * never collide. Computed once at createJob and never recomputed, so
+ * editing the received date afterward doesn't change a label already
+ * written on a physical racket tag.
+ */
+async function nextShortId(receivedIso: string): Promise<string> {
+  await ensureSchema();
+  const day = receivedIso.slice(2, 10).replace(/-/g, ""); // "2026-08-10" -> "260810"
+  const rows = (await db().query(
+    `INSERT INTO job_seq (day, n) VALUES ($1, 1)
+     ON CONFLICT (day) DO UPDATE SET n = job_seq.n + 1
+     RETURNING n`,
+    [day]
+  )) as { n: number }[];
+  const n = rows[0].n;
+  return `${day}-${String(n).padStart(2, "0")}`;
+}
+
 export async function createJob(input: JobSpecsInput, user: string): Promise<Job> {
   const { receivedDate, ...rawSpecs } = input;
   validateSpecs(rawSpecs);
   const specs = normalizeSpecs(rawSpecs);
   const now = new Date().toISOString();
+  const receivedAt = receivedStamp(receivedDate, now);
   const job: Job = {
     id: crypto.randomUUID(),
+    shortId: await nextShortId(receivedAt),
     createdAt: now,
     createdBy: user,
     ...specs,
     customerName: specs.customerName.trim(),
     status: "RECEIVED",
-    steps: { received: { at: receivedStamp(receivedDate, now), by: user } },
+    steps: { received: { at: receivedAt, by: user } },
     updatedAt: now,
     updatedBy: user,
   };

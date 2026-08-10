@@ -23,9 +23,17 @@ Tasya). Low volume (~2000 records), five users across three roles.
   names for the UI come from `displayName()` in `lib/permissions.ts`, falling
   back to the email's local part for unmapped addresses.
 - **Storage:** Neon Postgres (`DATABASE_URL`), via `@neondatabase/serverless`
-  — tables `jobs`, `deleted_jobs`, `push_subscriptions`, schema auto-created
-  on first use (`lib/db.ts`). Migrated from a CSV-in-Vercel-Blob design in
-  v2.0.0.
+  — tables `jobs`, `deleted_jobs`, `push_subscriptions`, `job_seq`, schema
+  auto-created on first use (`lib/db.ts`). Migrated from a CSV-in-Vercel-Blob
+  design in v2.0.0.
+- **Short job IDs:** every job also has a human-friendly `shortId` (e.g.
+  `260810-01` — YYMMDD from the received date + a daily sequence, reset each
+  day) shown throughout the UI instead of the UUID `id`, which remains the
+  real primary key/URL param. Assigned once at creation (`nextShortId` in
+  `lib/repository.ts`) via an atomic upsert on `job_seq` and never
+  recomputed — editing a job's received date later does not change a label
+  someone may have already written on a physical racket tag. Existing
+  pre-feature rows are backfilled once via `scripts/backfill-short-ids.mjs`.
 - **Notifications:** Web Push (`lib/push.ts`), role-aware — when a step
   completes, everyone holding the *next* step's role gets a push notification
   (`advanceStep` in `lib/repository.ts` fires it, fire-and-forget: a failed
@@ -118,6 +126,11 @@ npm run typecheck  # tsc --noEmit
   `DATABASE_URL` at a disposable **Neon branch** first (Neon console →
   Branches → create one from production, copy its connection string). The
   script always prints the target host so this is easy to double-check.
+- **Short-ID backfill**: `node scripts/backfill-short-ids.mjs` (same
+  dry-run/`--force`/host-printing safety pattern) assigns `short_id` to any
+  row that doesn't have one yet — a one-time migration for rows created
+  before that feature shipped. Safe to re-run; only touches `short_id = ''`
+  rows.
 - `DATABASE_URL` (Neon) is required at runtime; without it the repository
   throws a descriptive error. Local dev uses the same Neon DB as production —
   there is no local database, so be deliberate with destructive testing.
