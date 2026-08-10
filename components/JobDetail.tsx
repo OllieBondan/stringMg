@@ -170,7 +170,9 @@ export default function JobDetail({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {job.shortId && (
-            <p className="font-mono text-xs text-slate-400 dark:text-slate-500">{job.shortId}</p>
+            <span className="mb-1 inline-block rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+              {job.shortId}
+            </span>
           )}
           <h1 className="text-2xl font-bold tracking-tight">{job.customerName}</h1>
         </div>

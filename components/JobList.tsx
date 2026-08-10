@@ -267,7 +267,7 @@ export default function JobList({
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1.5">
             {job.shortId && (
-              <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] leading-none text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+              <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold leading-none text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
                 {job.shortId}
               </span>
             )}
