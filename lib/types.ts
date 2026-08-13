@@ -4,8 +4,8 @@ export type TensionUnit = (typeof TENSION_UNITS)[number];
 /**
  * The three job roles. Every workflow step below belongs to exactly one —
  * only a user holding that role may advance or undo it (see lib/permissions.ts).
- * Stringer currently owns no step directly (Front confirms the physical
- * handoff back from stringing) — it's a view-only role in the workflow today.
+ * Stringer owns step 3: Titon marks the racket strung himself, rather than
+ * Front confirming the handoff back.
  */
 export const ROLES = ["front", "stringer", "payee"] as const;
 export type Role = (typeof ROLES)[number];
@@ -41,10 +41,10 @@ export const STEPS = [
   {
     key: "fromTiton",
     column: "step3_from_titon",
-    label: "Received back from Titon",
-    action: "Receive back from Titon",
+    label: "Stringing done by Titon",
+    action: "Mark stringing done",
     status: "STRUNG",
-    role: "front",
+    role: "stringer",
   },
   {
     key: "returned",

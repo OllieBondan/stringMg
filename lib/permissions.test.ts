@@ -47,12 +47,14 @@ describe("permissions", () => {
 
   describe("canActOnStep", () => {
     const step1 = STEPS[0]; // received - front
+    const step3 = STEPS[2]; // fromTiton - stringer
     const step6 = STEPS[5]; // forwarded - payee
     const step7 = STEPS[6]; // tasyaReceived - payee
 
-    it("Front can act on front-role steps, not payee steps", () => {
+    it("Front can act on front-role steps, not stringer or payee steps", () => {
       clearEnv();
       expect(canActOnStep("ollie.bondan@gmail.com", step1)).toBe(true);
+      expect(canActOnStep("ollie.bondan@gmail.com", step3)).toBe(false);
       expect(canActOnStep("ollie.bondan@gmail.com", step7)).toBe(false);
     });
 
@@ -63,10 +65,10 @@ describe("permissions", () => {
       expect(canActOnStep("alyssatasya@gmail.com", step1)).toBe(false);
     });
 
-    it("Stringer (Titon) currently owns no step directly", () => {
+    it("Stringer (Titon) owns step 3 and nothing else", () => {
       clearEnv();
       for (const step of STEPS) {
-        expect(canActOnStep("titon@yonex.ch", step)).toBe(false);
+        expect(canActOnStep("titon@yonex.ch", step)).toBe(step === step3);
       }
     });
   });

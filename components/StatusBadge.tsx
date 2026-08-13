@@ -4,7 +4,7 @@ export const STATUS_LABELS: Record<JobStatus, string> = {
   RECEIVED: "Received",
   WITH_TITON: "Being Strung",
   STRUNG: "Strung",
-  RETURNED: "Returned, waiting for payment",
+  RETURNED: "Returned, unpaid",
   PAID: "Payment Received",
   FORWARDED: "Payment Forwarded",
   DONE: "Done",

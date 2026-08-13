@@ -16,10 +16,10 @@ Tasya). Low volume (~2000 records), five users across three roles.
   in `lib/types.ts`) — only members of that role can advance/undo it. Role
   membership is env-configurable (`FRONT_EMAILS`, `STRINGER_EMAILS`,
   `PAYEE_EMAILS`, comma-separated; defaults in `lib/permissions.ts`).
-  Front (Agung/Esti/Aisha) owns steps 1–5 (receive/hand off/receive
-  back/return/payment received); Payee (Tasya) owns steps 6–7 (forward
-  payment/confirm received). Stringer (Titon) strings the racket physically
-  but owns no step transition today — view-only in the workflow. Display
+  Front (Agung/Esti/Aisha) owns steps 1–2 and 4–5 (receive/hand
+  off/return/payment received); Stringer (Titon) owns step 3 — he marks the
+  racket strung himself; Payee (Tasya) owns steps 6–7 (forward
+  payment/confirm received). Display
   names for the UI come from `displayName()` in `lib/permissions.ts`, falling
   back to the email's local part for unmapped addresses.
 - **Storage:** Neon Postgres (`DATABASE_URL`), via `@neondatabase/serverless`
