@@ -23,7 +23,9 @@ describe("permissions", () => {
     expect(roleOf("ollie.bondan@gmail.com")).toBe("front");
     expect(roleOf("esti.bondan@gmail.com")).toBe("front");
     expect(roleOf("aisha.bondan@gmail.com")).toBe("front");
-    expect(roleOf("titon@yonex.ch")).toBe("stringer");
+    expect(roleOf("titongustaman3011@gmail.com")).toBe("stringer");
+    // the address is normally written with a capital T — must still match
+    expect(roleOf("Titongustaman3011@gmail.com")).toBe("stringer");
     expect(roleOf("alyssatasya@gmail.com")).toBe("payee");
   });
 
@@ -68,7 +70,7 @@ describe("permissions", () => {
     it("Stringer (Titon) owns step 3 and nothing else", () => {
       clearEnv();
       for (const step of STEPS) {
-        expect(canActOnStep("titon@yonex.ch", step)).toBe(step === step3);
+        expect(canActOnStep("Titongustaman3011@gmail.com", step)).toBe(step === step3);
       }
     });
   });
@@ -78,7 +80,7 @@ describe("permissions", () => {
       expect(displayName("ollie.bondan@gmail.com")).toBe("Agung");
       expect(displayName("esti.bondan@gmail.com")).toBe("Esti");
       expect(displayName("aisha.bondan@gmail.com")).toBe("Aisha");
-      expect(displayName("titon@yonex.ch")).toBe("Titon");
+      expect(displayName("Titongustaman3011@gmail.com")).toBe("Titon");
       expect(displayName("alyssatasya@gmail.com")).toBe("Tasya");
     });
 

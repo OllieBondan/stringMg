@@ -14,7 +14,7 @@ const ROLE_ENV: Record<Role, string> = {
 
 const ROLE_DEFAULTS: Record<Role, string[]> = {
   front: ["ollie.bondan@gmail.com", "esti.bondan@gmail.com", "aisha.bondan@gmail.com"],
-  stringer: ["titon@yonex.ch"],
+  stringer: ["titongustaman3011@gmail.com"],
   payee: ["alyssatasya@gmail.com"],
 };
 
@@ -43,7 +43,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   "ollie.bondan@gmail.com": "Agung",
   "esti.bondan@gmail.com": "Esti",
   "aisha.bondan@gmail.com": "Aisha",
-  "titon@yonex.ch": "Titon",
+  "titongustaman3011@gmail.com": "Titon",
   "alyssatasya@gmail.com": "Tasya",
 };
 
