@@ -1,5 +1,5 @@
 import { stringify } from "csv-stringify/sync";
-import { db, ensureSchema } from "./db";
+import { db, ensureSchema, isMissingRelationError, readSchemaGate, schemaSettled } from "./db";
 import { canActOnStep } from "./permissions";
 import {
   Job,
@@ -161,11 +161,29 @@ async function updateJobRow(job: Job, guardUpdatedAt: string): Promise<boolean> 
   return (rows as Row[]).length > 0;
 }
 
+/**
+ * Runs a read without waiting on the schema DDL (see readSchemaGate) — the
+ * cold-start latency that used to sit in front of every page load. If the
+ * tables genuinely don't exist yet, waits for the setup and runs it once more.
+ */
+async function read<T>(run: () => Promise<T>): Promise<T> {
+  await readSchemaGate();
+  try {
+    return await run();
+  } catch (err) {
+    if (!isMissingRelationError(err)) throw err;
+    await schemaSettled();
+    return run();
+  }
+}
+
 export async function listJobs(): Promise<Job[]> {
-  await ensureSchema();
-  const rows = (await db().query(
-    "SELECT * FROM jobs WHERE archived_at IS NULL ORDER BY created_at DESC"
-  )) as Row[];
+  const rows = await read(
+    async () =>
+      (await db().query(
+        "SELECT * FROM jobs WHERE archived_at IS NULL ORDER BY created_at DESC"
+      )) as Row[]
+  );
   return rows.map(rowToJob);
 }
 
@@ -175,16 +193,19 @@ export interface ArchivedJob extends Job {
 
 /** Completed jobs moved out of the active list (see archiveOldCompleted). */
 export async function listArchivedJobs(): Promise<ArchivedJob[]> {
-  await ensureSchema();
-  const rows = (await db().query(
-    "SELECT * FROM jobs WHERE archived_at IS NOT NULL ORDER BY archived_at DESC"
-  )) as Row[];
+  const rows = await read(
+    async () =>
+      (await db().query(
+        "SELECT * FROM jobs WHERE archived_at IS NOT NULL ORDER BY archived_at DESC"
+      )) as Row[]
+  );
   return rows.map((r) => ({ ...rowToJob(r), archivedAt: (r.archived_at as string) ?? "" }));
 }
 
 export async function getJob(id: string): Promise<Job> {
-  await ensureSchema();
-  const rows = (await db().query("SELECT * FROM jobs WHERE id = $1", [id])) as Row[];
+  const rows = await read(
+    async () => (await db().query("SELECT * FROM jobs WHERE id = $1", [id])) as Row[]
+  );
   if (rows.length === 0) throw new NotFoundError(`Job ${id} not found`);
   return rowToJob(rows[0]);
 }

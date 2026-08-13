@@ -108,26 +108,78 @@ CREATE TABLE IF NOT EXISTS job_seq (
   n int NOT NULL
 )`;
 
+// Indexes for the two list queries, which both sort a filtered set. Partial
+// indexes because the filter is exactly the split between the active list and
+// history, so each index only carries the rows its own query reads.
+const INDEX_STATEMENTS = [
+  `CREATE INDEX IF NOT EXISTS jobs_active_created_idx
+     ON jobs (created_at DESC) WHERE archived_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS jobs_archived_idx
+     ON jobs (archived_at DESC) WHERE archived_at IS NOT NULL`,
+];
+
+// The table/column DDL, batched into ONE HTTP round-trip via sql.transaction()
+// instead of nine sequential awaits. This runs on every cold start, and those
+// nine Neon round-trips landing ahead of the first read were the dominant cost
+// of a cold page load. Every statement is idempotent (IF NOT EXISTS), and the
+// driver's HTTP endpoint accepts one statement per query — hence a batch of
+// separate queries rather than a single semicolon-joined string.
+const TABLE_STATEMENTS = [
+  JOBS_TABLE_SQL,
+  DELETED_TABLE_SQL,
+  ARCHIVE_COLUMN_SQL,
+  OWN_STRING_COLUMN_SQL,
+  OWN_STRING_COLUMN_DELETED_SQL,
+  SHORT_ID_COLUMN_SQL,
+  SHORT_ID_COLUMN_DELETED_SQL,
+  PUSH_SUBSCRIPTIONS_TABLE_SQL,
+  JOB_SEQ_TABLE_SQL,
+];
+
 let schemaReady: Promise<void> | null = null;
 
-/** Creates the tables on first use (idempotent, cached per process). */
+/**
+ * Creates the tables on first use (idempotent, cached per process).
+ *
+ * Callers should NOT await this before a plain read — see readSchemaGate() in
+ * repository.ts. It stays awaited on the write paths, where a missing table
+ * would otherwise fail a mutation.
+ */
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {
     schemaReady = (async () => {
       const sql = db();
-      await sql.query(JOBS_TABLE_SQL);
-      await sql.query(DELETED_TABLE_SQL);
-      await sql.query(ARCHIVE_COLUMN_SQL);
-      await sql.query(OWN_STRING_COLUMN_SQL);
-      await sql.query(OWN_STRING_COLUMN_DELETED_SQL);
-      await sql.query(SHORT_ID_COLUMN_SQL);
-      await sql.query(SHORT_ID_COLUMN_DELETED_SQL);
-      await sql.query(PUSH_SUBSCRIPTIONS_TABLE_SQL);
-      await sql.query(JOB_SEQ_TABLE_SQL);
+      await sql.transaction(TABLE_STATEMENTS.map((s) => sql.query(s)));
+      // CREATE INDEX cannot run inside a transaction, so the indexes go in
+      // their own (single, parallel) statements after the tables exist.
+      await Promise.all(INDEX_STATEMENTS.map((s) => sql.query(s)));
     })().catch((err) => {
       schemaReady = null; // allow a retry on the next request
       throw err;
     });
   }
   return schemaReady;
+}
+
+/**
+ * Gate for READ paths: kick the schema setup off but don't wait for it.
+ *
+ * On a cold start the DDL is pure latency in front of a SELECT against tables
+ * that have existed since the first deploy. A read that races it either
+ * succeeds (the normal case) or fails with "relation does not exist" — which
+ * only happens against a genuinely empty database, and the caller retries once
+ * the schema promise settles. Writes still await ensureSchema() outright.
+ */
+export async function readSchemaGate(): Promise<void> {
+  if (!schemaReady) void ensureSchema().catch(() => {});
+}
+
+/** Awaits the in-flight schema setup, for a read to retry after a miss. */
+export function schemaSettled(): Promise<void> {
+  return schemaReady ?? ensureSchema();
+}
+
+/** Postgres "relation ... does not exist" — the only error a read gate risks. */
+export function isMissingRelationError(err: unknown): boolean {
+  return (err as { code?: string })?.code === "42P01";
 }
